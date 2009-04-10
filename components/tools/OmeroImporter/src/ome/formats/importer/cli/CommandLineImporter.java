@@ -4,6 +4,8 @@ import gnu.getopt.Getopt;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import loci.formats.FormatException;
 import loci.formats.ImageReader;
@@ -12,9 +14,16 @@ import ome.formats.OMEROMetadataStoreClient;
 import ome.formats.importer.ImportLibrary;
 import ome.formats.importer.OMEROWrapper;
 import omero.ServerError;
+import omero.model.CommentAnnotation;
+import omero.model.CommentAnnotationI;
 import omero.model.Dataset;
 import omero.model.IObject;
 import omero.model.Screen;
+import omero.model.Image;
+import omero.model.ImageAnnotationLink;
+import omero.model.ImageAnnotationLinkI;
+import omero.model.ImageI;
+import omero.model.Pixels;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -87,12 +96,14 @@ public class CommandLineImporter
      * @param targetId The Id of the target object to import the image into.
      * @param name Image name to use for import.
      * @param description Image description to use for import.
+     * @param partId Part to link all Images imported to.
      * @throws IOException If there is an error reading from <code>path</code>.
      * @throws FormatException If there is an error parsing metadata.
      * @throws ServerError If there is a problem interacting with the server.
      */
     public void importImage(String path, Class<? extends IObject> targetClass,
-    						Long targetId, String name, String description)
+                            Long targetId, String name, String description,
+                            Long partId)
         throws IOException, FormatException, ServerError
     {
         File f = new File(path);
@@ -102,7 +113,25 @@ public class CommandLineImporter
             target = store.getTarget(targetClass, targetId);
         }
         library.setTarget(target);
-        library.importImage(f, 0, 0, 1, name, description, false, null);
+        List<Pixels> pixelsList =
+                library.importImage(f, 0, 0, 1, name, description, false, null);
+        if (partId != null)
+        {
+            CommentAnnotation unloadedPart =
+                    new CommentAnnotationI(partId, false);
+            List<IObject> toSave = 
+                    new ArrayList<IObject>();
+            for (Pixels pixels : pixelsList)
+            {
+                Image unloadedImage = 
+                        new ImageI(pixels.getImage().getId(), false);
+                ImageAnnotationLink link = new ImageAnnotationLinkI();
+                link.setParent(unloadedImage);
+                link.setChild(unloadedPart);
+                toSave.add(link);
+            }
+            store.save(toSave);
+        }
         store.logout();
     }
     
@@ -135,6 +164,7 @@ public class CommandLineImporter
                 "  -r\tOMERO screen Id to import plate into\n" +
                 "  -n\tImage name to use\n" +
                 "  -x\tImage description to use\n" +
+                "  -y\tPart number to link all images to" +
                 "  -p\tOMERO server port [defaults to 4063]\n" +
                 "  -h\tDisplay this help and exit\n" +
                 "\n" +
@@ -157,7 +187,7 @@ public class CommandLineImporter
      */
     public static void main(String[] args)
     {
-        Getopt g = new Getopt(APP_NAME, args, "fs:u:w:d:r:k:x:n:p:h");
+        Getopt g = new Getopt(APP_NAME, args, "fs:u:w:d:r:k:x:y:n:p:h");
         int a;
         String username = null;
         String password = null;
@@ -168,6 +198,7 @@ public class CommandLineImporter
         Long targetId = null;
         String name = null;
         String description = null;
+        Long partId = null;
         boolean getUsedFiles = false;
         while ((a = g.getopt()) != -1)
         {
@@ -218,6 +249,11 @@ public class CommandLineImporter
                 case 'x':
                 {
                 	description = g.getOptarg();
+                	break;
+                }
+                case 'y':
+                {
+                	partId = Long.parseLong(g.getOptarg());
                 	break;
                 }
                 case 'f':
@@ -284,7 +320,7 @@ public class CommandLineImporter
                 c = new CommandLineImporter(username, password, hostname, port);
             }
             c.library.addObserver(new LoggingImportMonitor());
-            c.importImage(path, targetClass, targetId, name, description);
+            c.importImage(path, targetClass, targetId, name, description, partId);
             System.exit(0);  // Exit with specified return code
         }
         catch (Throwable t)

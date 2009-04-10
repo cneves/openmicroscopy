@@ -2294,6 +2294,18 @@ public class OMEROMetadataStoreClient
         }
     }
 
+    /**
+     * Saves objects in the OMERO server. "Hack" for Part updates in the 
+     * journal workflow.
+     * @param objects Objects to save.
+     * @throws ServerError If there was an error communicating with the
+     * OMERO server.
+     */
+    public void save(List<IObject> objects) throws ServerError
+    {
+       iUpdate.saveArray(objects);
+    }
+
     public Project getProject(long projectId)
     {
         try
