@@ -63,11 +63,7 @@ def monitorPackage():
             try:
                 # pyinotify versions have slightly different APIs
                 # so the version needs to be determined.
-                try:
-                    from pyinotify import pyinotify
-                except:
-                    import pyinotify
-
+                import pyinotify
                 try:
                     # 0.8.x has a __version__ attribute.
                     version = pyinotify.__version__.split('.')
@@ -75,14 +71,19 @@ def monitorPackage():
                         current = 'LINUX_2_6_13+pyinotify_0_8'
                     # This pyinotofy has a __version__ attribute but isn't 0.8.
                     else:
-                        errorString = "Pyinotify 0.7 or above required. Unknown version found."
+                        errorString = "Pyinotify 0.7 or above required. Unknown version found: " + version
                 except:
                     # 0.7.x doesn't have a __version__ attribute but there is
                     # a possibility that the installed version is 0.6 or less.
                     # That isn't tested for and might be a point of failure.
-                    current = 'LINUX_2_6_13+pyinotify_0_7'
-            except:
-                errorString = "Pyinotify 0.7 or above required. Package not found."
+                    from pyinotify import EventsCodes
+                    try:
+                        EventsCodes.IN_CLOSE_WRITE
+                        current = 'LINUX_2_6_13+pyinotify_0_7'
+                    except:
+                        errorString = "Pyinotify 0.7 or above required. Package failed to import."
+            except Exception, e:
+                errorString = "Pyinotify 0.7 or above required. Package not found. Reason:" + str(e)
         # Unsupported Linux kernel version.    
         else:
             errorString = "Linux kernel 2.6.13 or above required. "
@@ -109,4 +110,8 @@ def monitorPackage():
         return supported[current]
     except:
         raise Exception("Libraries required by OMERO.fs monitor unavailable: " + errorString)
-    
+
+   
+if __name__ == "__main__":
+    print "IMPORTED:"
+    print str(monitorPackage())

@@ -7,10 +7,8 @@ import logging
 import fsLogger
 log = logging.getLogger("fs."+__name__)
 
-try:
-    from pyinotify import pyinotify
-except:
-    import pyinotify
+import pyinotify
+from pyinotify import EventsCodes
 
 import threading
 import sys, traceback
@@ -83,7 +81,7 @@ class Monitor(threading.Thread):
         self.notifier = pyinotify.ThreadedNotifier(wm, pr)
         
         if str(eventType) == 'Create':
-            wm.add_watch(pathsToMonitor, (pyinotify.IN_CLOSE_WRITE | pyinotify.IN_MOVED_TO), rec=recurse, auto_add=follow)
+            wm.add_watch(pathsToMonitor, (EventsCodes.IN_CLOSE_WRITE | EventsCodes.IN_MOVED_TO), rec=recurse, auto_add=follow)
             log.info('Monitor set-up on =' + str(pathsToMonitor))
 
 
