@@ -112,6 +112,14 @@ public class RenderingSettingsImpl extends AbstractLevel2Service implements
     private RenderingDef resetDefaults(RenderingDef settings, Pixels pixels,
                                        boolean save, boolean computeStats)
     {
+    	// Handle the case where we have no rendering settings so that we can
+    	// reset "pretty good image" or "original" (channel minimum and
+    	// maximum) when they don't exist.
+        if (settings == null)
+        {
+        	settings = createNewRenderingDef(pixels);
+        }
+        
         List<Family> families = pixelsMetadata.getAllEnumerations(Family.class);
         List<RenderingModel> renderingModels = 
             pixelsMetadata.getAllEnumerations(RenderingModel.class);
@@ -767,6 +775,16 @@ public class RenderingSettingsImpl extends AbstractLevel2Service implements
         Image image = iQuery.get(Image.class, to);
         resetDefaults(image);
     }
+    
+    /**
+     * Implemented as specified by the {@link IRenderingSettings} I/F.
+     * @see IRenderingSettings#resetDefaultsForPixels(long)
+     */
+    @RolesAllowed("user")
+    public void resetDefaultsForPixels(long pixelsId) {
+        Pixels pixels = iQuery.get(Pixels.class, pixelsId);
+        resetDefaults(pixels);
+    }
 
     /**
      * Implemented as specified by the {@link IRenderingSettings} I/F.
@@ -830,6 +848,15 @@ public class RenderingSettingsImpl extends AbstractLevel2Service implements
     @RolesAllowed("user")
     public void setOriginalSettingsInImage(long to) {
         setOriginalSettings(iQuery.get(Image.class, to));
+    }
+    
+    /**
+     * Implemented as specified by the {@link IRenderingSettings} I/F.
+     * @see IRenderingSettings#setOriginalSettingsForPixels(long)
+     */
+    @RolesAllowed("user")
+    public void setOriginalSettingsForPixels(long pixelsId) {
+        setOriginalSettings(iQuery.get(Pixels.class, pixelsId));
     }
     
     /**
