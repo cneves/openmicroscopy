@@ -719,9 +719,19 @@ public class RenderingBean implements RenderingEngine, Serializable {
                     new Executor.SimpleWork(this,"saveCurrentSettings"){
                         @Transactional(readOnly = false)
                         public Object doWork(Session session, ServiceFactory sf) {
-                            IPixels pixMetaSrv = sf.getPixelsService();
-                            pixMetaSrv.saveRndSettings(rendDefObj);
-                            return pixMetaSrv.retrieveRndSettings(pixelsObj.getId());
+                            try {
+                                IPixels pixMetaSrv = sf.getPixelsService();
+                                pixMetaSrv.saveRndSettings(rendDefObj);
+                                return pixMetaSrv.retrieveRndSettings(pixelsObj.getId());
+                            } finally {
+                                try {
+                                    session.flush();
+                                    session.clear();
+                                } catch (Exception e) {
+                                    log.error("Exception while flushing:",e);
+                                }
+                            }
+
                         }});
             
             // Unload the linked pixels set to avoid transactional headaches on
