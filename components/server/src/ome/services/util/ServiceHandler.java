@@ -53,6 +53,10 @@ public class ServiceHandler implements MethodInterceptor, ApplicationListener {
 
     private final CurrentDetails cd;
 
+    private final long methodTimeError;
+
+    private final long methodTimeWarn;
+
     public void onApplicationEvent(ApplicationEvent arg0) {
         if (arg0 instanceof RegisterServiceCleanupMessage) {
             RegisterServiceCleanupMessage cleanup = (RegisterServiceCleanupMessage) arg0;
@@ -60,8 +64,10 @@ public class ServiceHandler implements MethodInterceptor, ApplicationListener {
         }
     }
 
-    public ServiceHandler(CurrentDetails cd) {
+    public ServiceHandler(CurrentDetails cd, long methodTimeWarn, long methodTimeError) {
         this.cd = cd;
+        this.methodTimeWarn = methodTimeWarn;
+        this.methodTimeError = methodTimeError;
     }
 
     /**
@@ -116,10 +122,13 @@ public class ServiceHandler implements MethodInterceptor, ApplicationListener {
             // Logging long invocations. Very long invocations are indicative
             // of a server undergoing stress.
             long time = stopWatch.getElapsedTime();
-            if (time > 10 * 1000L) {
-                log.error("Method invocation took " + time);
-            } else if (time > 2 * 1000L) {
-                log.warn("Method invocation took " + time);
+            String msg = String.format("Method %s.%s invocation took %s",
+                                       arg0.getMethod().getDeclaringClass(),
+                                       arg0.getMethod().getName(), time);
+            if (time > methodTimeError) {
+                log.error(msg);
+            } else if (time > methodTimeWarn) {
+                log.warn(msg);
             }
             cleanup();
         }
