@@ -1,6 +1,6 @@
 /*
  *   $Id$
- * 
+ *
  *   Copyright 2007 Glencoe Software, Inc. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
  *
@@ -27,7 +27,10 @@
  *   |_ ResourceError (non-recoverable)
  *   |
  *   |_ ConcurrencyException (recoverable)
- *   |  |_ OptimisticLockException (changed data)
+ *   |  |_ ConcurrentModification (data was changed)
+ *   |  |_ OptimisticLockException (changed data conflicts)
+ *   |  |_ LockTimeout (took too long to aquire lock)
+ *   |  |_ TryAgain (took too long to aquire lock)
  *   |  \_ TooManyUsersException
  *   |     \_ DatabaseBusyException
  *   |
@@ -36,11 +39,12 @@
  *   |   |_ QueryException
  *   |   \_ ValidationException (bad data)
  *   |
- *   |- SecurityViolation (some no-no)
+ *   |_ SecurityViolation (some no-no)
  *   |
  *   \_SessionException
- *      |_RemovedSessionException (accessing a non-extant session)
- *      \_SessionTimeoutException (session timed out; not yet removed)
+ *      |_ RemovedSessionException (accessing a non-extant session)
+ *      |_ SessionTimeoutException (session timed out; not yet removed)
+ *      \_ ShutdownInProgress      (session on this server will most likely be destroyed)
  *
  *
  * However, the Ice runtime also has its own hierarchy (which we subclass in
@@ -122,6 +126,15 @@ module omero
 
     };
 
+  /**
+   * Server is in the progress of shutting down which will
+   * typically lead to the current session being closed.
+   */
+  exception ShutdownInProgress extends SessionException
+    {
+
+    };
+
 
   // SESSION EXCEPTIONS (Glacier2) ---------------------
 
@@ -199,15 +212,33 @@ module omero
   /**
    * Too many simultaneous database users.
    */
+  exception ConcurrentModification extends ConcurrencyException
+    {
+    };
+
+  /**
+   * Too many simultaneous database users. This implies that a
+   * connection to the database could not be acquired, no data
+   * was saved or modifed. Clients may want to wait the given
+   * backOff period, and retry.
+   */
   exception DatabaseBusyException extends ConcurrencyException
     {
     };
-    
+
   /**
    * Conflicting changes to the same piece of data.
    */
   exception OptimisticLockException extends ConcurrencyException
     {
+    };
+
+  /**
+   * Lock cannot be acquired and has timed out.
+   */
+  exception LockTimeout extends ConcurrencyException
+    {
+        int seconds; // Informational field on how long timeout was
     };
 
   // API USAGE
@@ -219,7 +250,7 @@ module omero
   exception OverUsageException extends ApiUsageException
     {
     };
-    
+
   exception QueryException extends ApiUsageException
     {
     };
@@ -233,6 +264,21 @@ module omero
   exception SecurityViolation extends ServerError
     {
     };
+
+  // OMEROFS
+
+    /**
+     * OmeroFSError
+     *
+     * Just one catch-all UserException for the present. It could be
+     * subclassed to provide a finer grained level if necessary.
+     *
+     * It should be fitted into or subsumed within the above hierarchy
+     **/
+    exception OmeroFSError extends ServerError
+      {
+        string reason;
+      };
 
 
 };

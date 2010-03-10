@@ -19,7 +19,7 @@ import ome.model.IObject;
  * 
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 2008 $ $Date: 2008-01-04 14:16:45 +0000 (Fri, 04 Jan 2008) $) </small>
  * @since 1.0
  */
 public interface SecureAction {

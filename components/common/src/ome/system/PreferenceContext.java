@@ -7,18 +7,18 @@
 
 package ome.system;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanDefinitionStoreException;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.config.PreferencesPlaceholderConfigurer;
 import org.springframework.beans.factory.config.PropertyPlaceholderConfigurer;
 
@@ -48,8 +48,6 @@ public class PreferenceContext extends PreferencesPlaceholderConfigurer {
 
     final private Map<String, Preference> preferences = new ConcurrentHashMap<String, Preference>();
 
-    private Properties mergedProperties;
-
     private String path;
 
     /**
@@ -58,7 +56,8 @@ public class PreferenceContext extends PreferencesPlaceholderConfigurer {
      * well as ignoring unfound resources. The {@link #setUserTreePath(String)}
      * user-tree is set according to a similar logic as in the {@link prefs}
      * command-line tool, using first {@link #ENV} from the environment if
-     * present, otherwise the value of "omero.prefs.default".
+     * present, otherwise the value of "default" under "/omero/prefs". If no
+     * value is found, then the node "/omero/prefs/default" will be used.
      */
     public PreferenceContext() {
         setSystemPropertiesMode(SYSTEM_PROPERTIES_MODE_OVERRIDE);
@@ -73,9 +72,13 @@ public class PreferenceContext extends PreferencesPlaceholderConfigurer {
         }
 
         // Ok, then if we've found something use it.
-        if (OMERO != null) {
-            setUserTreePath(ROOT + "/" + OMERO);
+        // otherwise use /omero/prefs/default
+        if (OMERO == null) {
+            OMERO = "default";
         }
+
+        setUserTreePath(ROOT + "/" + OMERO);
+        log.info("Preferences used: " + ROOT + "/" + OMERO);
 
     }
 
@@ -85,25 +88,23 @@ public class PreferenceContext extends PreferencesPlaceholderConfigurer {
         this.path = userTreePath;
     }
 
-    @Override
-    public void afterPropertiesSet() {
-        super.afterPropertiesSet();
-        try {
-            this.mergedProperties = mergeProperties();
-        } catch (Exception e) {
-            log.error("Could not load properties", e);
-            this.mergedProperties = new Properties();
-        }
-    }
-    
     /**
      * Lookup method for getting access to the {@link #mergeProperties() merged
      * properties} for this instance.
      */
     public String getProperty(String key) {
         try {
-            return parseStringValue("${"+key+"}", this.mergedProperties, new HashSet<String>());
+            try {
+                Preferences.userRoot().node(this.path).sync();
+            } catch (BackingStoreException e) {
+                log.error("Error synchronizing for mergeProperties()");
+            }
+            return parseStringValue("${" + key + "}", mergeProperties(),
+                    new HashSet<String>());
         } catch (BeanDefinitionStoreException bdse) {
+            return null; // Unknown property. Ok
+        } catch (IOException e) {
+            log.error("Error on mergeProperties()", e);
             return null;
         }
     }
@@ -114,6 +115,11 @@ public class PreferenceContext extends PreferencesPlaceholderConfigurer {
             prefs.put(key, value);
         } else {
             prefs.remove(key);
+        }
+        try {
+            prefs.flush();
+        } catch (BackingStoreException e) {
+            log.error("Error flushing prefs on setProperty: " + key);
         }
     }
 
@@ -128,21 +134,21 @@ public class PreferenceContext extends PreferencesPlaceholderConfigurer {
     // =========================================================================
 
     public String resolveAlias(String key) {
-        
+
         if (preferences.containsKey(key)) {
             return key;
         }
-        
+
         for (String current : preferences.keySet()) {
             Preference preference = preferences.get(current);
             if (preference.hasAlias(key)) {
                 return current;
             }
         }
-        
+
         return key;
     }
-    
+
     public boolean checkDatabase(String key) {
         Preference preference = getPreferenceOrDefault(key);
 

@@ -26,7 +26,7 @@ import ome.model.meta.ExperimenterGroup;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Revision: 2122 $ $Date: 2008-02-07 11:19:40 +0000 (Thu, 07 Feb 2008) $) </small>
  * @since OMERO3.0
  */
 public interface LocalAdmin extends ome.api.IAdmin {

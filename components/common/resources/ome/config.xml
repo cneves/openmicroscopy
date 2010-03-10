@@ -3,7 +3,7 @@
 <!--
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 
-# $Id$
+# $Id: config.xml 4824 2009-09-07 08:28:23Z jmoore $
 # 
 # Copyright 2008, 2009 Glencoe Software, Inc. All rights reserved.
 # Use is subject to license terms supplied in LICENSE.txt
@@ -27,6 +27,15 @@
     See https://trac.openmicroscopy.org.uk/omero/ticket/800 for more information
     on how this works.
     </description>
+
+    <bean id="permissionsContext" class="ome.system.PermissionsContext">
+        <description>
+            Sets the value of the default permissions key based on the
+            PreferenceContext in the system properties to be loaded by
+            the ome.model.internal.Permissions class.
+        </description>
+        <constructor-arg ref="preferenceContext"/>
+    </bean>
 
     <bean id="preferenceContext" class="ome.system.PreferenceContext">
 
@@ -72,6 +81,16 @@
         <property name="visibility" value="hidden"/>
     </bean>
     <!--  DATABASE PROPERTIES -->
+    <bean class="ome.system.Preference" id="omero.db.authority">
+       <property name="db" value="true"/>
+       <property name="mutable" value="false"/>
+       <property name="visibility" value="all"/>
+    </bean>
+    <bean class="ome.system.Preference" id="omero.db.uuid">
+       <property name="db" value="true"/>
+       <property name="mutable" value="false"/>
+       <property name="visibility" value="all"/>
+    </bean>
     <bean class="ome.system.Preference" id="omero.db.host">
        <property name="db" value="false"/>
        <property name="aliases" value="database.host"/>

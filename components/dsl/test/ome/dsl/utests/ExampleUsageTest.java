@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ExampleUsageTest.java 2775 2008-08-28 10:39:27Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

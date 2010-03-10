@@ -33,6 +33,13 @@ import org.ini4j.InvalidIniFormatException;
 
 public class TestEngineConfig extends IniPreferences
 {
+    
+    public static enum ErrorOn { 
+        never,
+        minimal,
+        any;
+    }
+    
 	/** Root node of the configuration file. */
 	public static final String CONFIG_ROOT = "main";
 	
@@ -57,9 +64,29 @@ public class TestEngineConfig extends IniPreferences
 	/** If we're performing a single directory test run */
 	public static final String CONFIG_RECURSE = "recurse";
 	
-	/** Target directory for the test engine to work with */
-	public static final String CONFIG_TARGET = "target_directory";
-	
+    /** Target directory for the test engine to work with */
+    public static final String CONFIG_TARGET = "target_directory";
+    
+    /** Value for which an error (non-0 exitcode) will be signalled */
+    public static final String CONFIG_ERRORON = "error_on";
+    
+    /** Feedback url to be used */
+    public static final String CONFIG_FEEDBACK = "feedback_url";
+    
+    public static final String DEFAULT_FEEDBACK = "http://users.openmicroscopy.org.uk/~brain/omero/bugcollector.php";
+    
+    public static final String CONFIG_FEEDBACK_LOGIN_URL = "login_url";
+
+    public static final String CONFIG_FEEDBACK_LOGIN_USERNAME = "login_username";
+
+    public static final String CONFIG_FEEDBACK_LOGIN_PASSWORD = "login_password";
+
+    public static final String CONFIG_FEEDBACK_MESSAGE_URL = "message_url";
+
+    public static final String CONFIG_FEEDBACK_COMMENT_URL = "comment_url";
+    
+    public static final String DEFAULT_COMMENT_URL = "http://qa.openmicroscopy.org.uk/qa/initial/";
+    
 	/**
 	 * Test engine configuration, backed by an initiation file.
 	 * @param file The file to use as a backing store.
@@ -200,24 +227,103 @@ public class TestEngineConfig extends IniPreferences
 		return node(CONFIG_ROOT).getBoolean(CONFIG_RECURSE, true);
 	}
 	
-	/**
-	 * Sets the target directory configuration property.
-	 * @param rescurse Value to set.
-	 */
-	public void setTarget(String target)
-	{
-		node(CONFIG_ROOT).put(CONFIG_TARGET, target);
-	}
-	
-	/**
-	 * Returns the target directory configuration property.
-	 * @return See above.
-	 */
-	public String getTarget()
-	{
-		return node(CONFIG_ROOT).get(CONFIG_TARGET, null);
-	}
-	
+    /**
+     * Sets the target directory configuration property.
+     * @param rescurse Value to set.
+     */
+    public void setTarget(String target)
+    {
+        node(CONFIG_ROOT).put(CONFIG_TARGET, target);
+    }
+    
+    /**
+     * Returns the target directory configuration property.
+     * @return See above.
+     */
+    public String getTarget()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_TARGET, null);
+    }
+
+    /**
+     * Sets the feedback url configuration property.
+     */
+    public void setFeedbackUrl(String feedbackUrl)
+    {
+        node(CONFIG_ROOT).put(CONFIG_FEEDBACK, feedbackUrl);
+    }
+    
+    /**
+     * Returns the feedback url configuration property.
+     */
+    public String getFeedbackUrl()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_FEEDBACK, DEFAULT_FEEDBACK);
+    }
+    
+    /**
+     * Returns the feedback login url configuration property.
+     */
+    public String getFeedbackLoginUrl()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_FEEDBACK_LOGIN_URL, null);
+    }    
+
+    /**
+     * Returns the feedback login url configuration property.
+     */
+    public String getFeedbackLoginUsername()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_FEEDBACK_LOGIN_USERNAME, null);
+    } 
+
+    /**
+     * Returns the feedback login url configuration property.
+     */
+    public String getFeedbackLoginPassword()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_FEEDBACK_LOGIN_PASSWORD, null);
+    } 
+
+    /**
+     * Returns the feedback login url configuration property.
+     */
+    public String getFeedbackMessageUrl()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_FEEDBACK_MESSAGE_URL, null);
+    } 
+    
+    /**
+     * Returns the comment system url configuration property.
+     */
+    public String getCommentUrl()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_FEEDBACK_COMMENT_URL, DEFAULT_COMMENT_URL);
+    }
+    
+    /**
+     * Sets the error-on configuration property. Does this by first lowercasing
+     * the string, and then checking for an equivalent enumeration in
+     * {@link ErrorOn}
+     */
+    public void setErrorOn(String errorOn)
+    {
+        if (errorOn == null) {
+            errorOn = "";
+        }
+        errorOn = errorOn.toLowerCase();
+        ErrorOn.valueOf(errorOn); // Throws if necessary.
+        node(CONFIG_ROOT).put(CONFIG_ERRORON, errorOn);
+    }
+    
+    /**
+     * Returns the feedback url configuration property.
+     */
+    public String getErrorOn()
+    {
+        return node(CONFIG_ROOT).get(CONFIG_ERRORON, "any");
+    }
+    
 	/**
 	 * Checks if we have the configuration properties available to perform an
 	 * OMERO server login.

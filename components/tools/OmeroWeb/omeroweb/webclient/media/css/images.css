@@ -38,11 +38,23 @@
     font-weight: bold;
     width: 99%;
 }
+#products li.dataset{
+    text-align: left;
+    margin: 0px;
+    padding: 5px 0;
+    width: 99%;
+}
 #products li.clear{
     clear:both;
     width: 0;
 }
 
+#products li div.product {
+    border: 0px;
+    float: left;
+    text-align: center;
+    margin: 8px;
+}
 em {
     background-color: #fff;
     border: 1px solid #bbb;
@@ -83,18 +95,22 @@ div#view, div#view2  {
 }
 
 .project {
-    width: 720px;
+    width: 610px;
+    float:left;
+}
+.screen {
+    width: 610px;
     float:left;
 }
 .dataset {
-    width: 720px;
+    width: 610px;
     float:left;
 }
 .tag {
     width: 100%;
 }
 .image {
-    width: 720px;
+    width: 610px;
     float:left;
 }
 .toolbar {
@@ -111,16 +127,35 @@ div#view, div#view2  {
     background-color: #fff;
     padding: 5px;
 }
-.thumbnail {
+.miniview {
+    /* This is for the miniviewer in image_details */
     float: left;
     width: 600px;
-    padding: 0;
+    height: 500px;
+    position: relative;
+}
+.miniview_desc {
+    float: left;
+    width: 600px;
+    position: relative;
 }
 .metadata {
     float: right;
     margin: -8px 0 20px 0;
+    position: relative;
+}
+.metadata_details {
+    max-height: 430px;
+    overflow: auto;
+    padding-top: 5px;
 }
 
+table.formsm {
+    width: 100%;
+}
+table.formsm td{
+    border-bottom: 1px dotted #bbb;
+}
 .ui-accordion-help {
     list-style-type:none;
     margin:0;
@@ -132,7 +167,7 @@ div#view, div#view2  {
     list-style-type:none;
     margin:0;
     padding:0;
-    width: 350px;
+    width: 360px;
 }
 .ui-accordion-metadata  table td {
     padding: 2px;

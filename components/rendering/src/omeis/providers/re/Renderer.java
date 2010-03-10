@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 // Third-party libraries
 import org.apache.commons.logging.Log;
@@ -67,7 +68,7 @@ import omeis.providers.re.quantum.QuantumStrategy;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 5745 $ $Date:
  *          2005/07/05 16:13:52 $) </small>
  * @since OME2.2
  */
@@ -75,6 +76,9 @@ public class Renderer {
 
     /** The logger for this particular class */
     private static Log log = LogFactory.getLog(Renderer.class);
+    
+    /** The maximum number of channels. */
+    public static final int		MAX_CHANNELS = 6;
     
     /** Identifies the type used to store model values. */
     public static final String MODEL_GREYSCALE = "greyscale";
@@ -128,6 +132,9 @@ public class Renderer {
 
     /** Renderer optimizations. */
     private Optimizations optimizations = new Optimizations();
+    
+    /** Map of overlays we've currently been told to render. */
+    private Map<byte[], Integer> overlays;
 
     /**
      * Returns a copy of a list of channel bindings with one element removed;
@@ -207,8 +214,14 @@ public class Renderer {
     		// First lets check and see if we have more than 3 channels active.
     		if (channelBinding.getActive() == false)
     			continue;
-    		
     		channelsActive++;
+    		
+    		if (overlays != null && overlays.size() > 0)
+    		{
+    			log.info("Disabling PriColor rendering, have overlays.");
+    			optimizations.setPrimaryColorEnabled(false);
+    			return;
+    		}
     		if (channelsActive > 3)
     		{
     			log.info("Disabling PriColor rendering, active channels > 3");
@@ -360,6 +373,23 @@ public class Renderer {
      */
     public void setDefaultT(int t) {
         rndDef.setDefaultT(Integer.valueOf(t));
+    }
+    
+    /**
+     * Sets a map of overlays to be rendered.
+     * @param overlays Overlay to color map.
+     */
+    public void setOverlays(Map<byte[], Integer> overlays) {
+    	this.overlays = overlays;
+    	checkOptimizations();
+    }
+    
+    /**
+     * Returns the current set of overlays to be rendered.
+     * @return Overlay to color map.
+     */
+    public Map<byte[], Integer> getOverlays() {
+    	return overlays;
     }
 
     /**

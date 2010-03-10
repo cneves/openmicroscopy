@@ -72,8 +72,8 @@ public class ManagedContextFixture {
         Ice.Current current = new Ice.Current();
         current.ctx = new HashMap<String, String>();
         current.ctx.put(omero.constants.CLIENTUUID.value, "my-client-uuid");
-        ServiceFactoryI factory = new ServiceFactoryI(current, ctx, mgr, ex,
-                getPrincipal(), null);
+        ServiceFactoryI factory = new ServiceFactoryI(current, null, ctx, mgr, ex,
+                getPrincipal(), null, null, null);
         return factory;
     }
 
@@ -145,9 +145,13 @@ public class ManagedContextFixture {
     }
 
     public void setCurrentUser(String user) {
-        Principal p = new Principal(user, "user", "Test");
+        setCurrentUserAndGroup(user, "user");
+    }
+    
+    public void setCurrentUserAndGroup(String user, String group) {
+        Principal p = new Principal(user, group, "Test");
         Session s = mgr.create(p);
-        p = new Principal(s.getUuid(), "user", "Test");
+        p = new Principal(s.getUuid(), group, "Test");
         login.p = p;
     }
 

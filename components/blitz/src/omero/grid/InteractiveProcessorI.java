@@ -36,6 +36,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.transaction.annotation.Transactional;
 
+import Glacier2.SessionControlPrx;
 import Ice.Current;
 
 /**
@@ -67,7 +68,11 @@ public class InteractiveProcessorI extends _InteractiveProcessorDisp {
     private final ReadWriteLock rwl = new ReentrantReadWriteLock();
 
     private final Principal principal;
+    
+    private final SessionControlPrx control;
 
+    private boolean detach = false;
+    
     private boolean obtainResults = false;
 
     private boolean stop = false;
@@ -87,13 +92,14 @@ public class InteractiveProcessorI extends _InteractiveProcessorDisp {
      * @param timeout
      */
     public InteractiveProcessorI(Principal p, SessionManager mgr, Executor ex,
-            ProcessorPrx prx, Job job, long timeout) {
+            ProcessorPrx prx, Job job, long timeout, SessionControlPrx control) {
         this.principal = p;
         this.ex = ex;
         this.mgr = mgr;
         this.prx = prx;
         this.job = job;
         this.timeout = timeout;
+        this.control = control;
         this.session = UNINITIALIZED;
     }
 
@@ -163,6 +169,11 @@ public class InteractiveProcessorI extends _InteractiveProcessorDisp {
             // Execute
             try {
                 currentProcess = prx.processJob(session.getUuid(), job);
+                // Have to add the process to the control, otherwise the
+                // user won't be able to view it: ObjectNotExistException!
+                // ticket:1522
+                control.identities().add(
+                        new Ice.Identity[]{currentProcess.ice_getIdentity()});
             } catch (ServerError se) {
                 log.debug("Error while processing job", se);
                 throw se;
@@ -214,26 +225,91 @@ public class InteractiveProcessorI extends _InteractiveProcessorDisp {
         return job;
     }
 
-    /**
-     * Cancels the current process, nulls the value, and returns immediately.
-     */
-    public void stop() {
+    public boolean setDetach(boolean detach, Current __current) {
         rwl.writeLock().lock();
         try {
-            if (currentProcess != null) {
-                currentProcess.cancel();
-                currentProcess = null;
-                stop = true;
+            boolean old = this.detach;
+            this.detach = detach;
+            return old;
+        } finally {
+            rwl.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Cancels the current process, nulls the value, and returns immediately
+     * if detach is false.
+     */
+    public void stop(Current __current) throws ServerError {
+        rwl.writeLock().lock();
+        
+        if (stop) {
+            return; // Already stopped.
+        }
+        
+        try {
+            
+            if (detach) {
+                if (currentProcess != null) {
+                    log.info("Detaching from " + currentProcess);
+                }
+            } else {
+                doStop();
             }
+
+        stop = true;
+            
         } finally {
             rwl.writeLock().unlock();
         }
     }
 
+    protected void doStop() throws ServerError {
+        // Then perform cleanup
+        Exception pException = null;
+        Exception sException = null;
+        
+        if (currentProcess != null) {
+            try {
+                ProcessPrx p = ProcessPrxHelper.uncheckedCast(
+                        currentProcess.ice_oneway());
+                p.shutdown();
+                currentProcess = null;
+            } catch (Exception ex) {
+                log.warn("Failed to stop process", ex);
+                pException = ex;
+            }
+        }
+        
+        if (session != null && session != UNINITIALIZED) {
+            try {
+                while (mgr.close(session.getUuid()) > 0);
+                session = null;
+            } catch (Exception ex) {
+                log.warn("Failed to close session " + session.getUuid(), ex);
+                sException = ex;
+            }
+        }
+        
+        if (pException != null || sException != null) {
+            omero.InternalException ie = new omero.InternalException();
+            StringBuilder sb = new StringBuilder();
+            if (pException != null) {
+                sb.append("Failed to shutdown process: " + pException.getMessage());
+            }
+            if (sException != null) {
+                sb.append("Failed to close session: " + sException.getMessage());
+            }
+            ie.message = sb.toString();
+            throw ie;
+        }
+
+    }
+    
     // Helpers
     // =========================================================================
 
-    private void finishedOrThrow() throws ApiUsageException {
+    private void finishedOrThrow() throws ServerError {
         if (currentProcess == null) {
             throw new ApiUsageException(null, null, "No current process.");
         } else if (currentProcess.poll() == null) {
@@ -271,7 +347,7 @@ public class InteractiveProcessorI extends _InteractiveProcessorDisp {
                 ec.getCurrentGroupName(), "Processing"));
         newSession.setTimeToIdle(0L);
         newSession.setTimeToLive(timeout);
-        newSession = mgr.update(newSession);
+        newSession = mgr.update(newSession, true);
 
         return newSession;
     }

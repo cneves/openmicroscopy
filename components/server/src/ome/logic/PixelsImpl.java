@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: PixelsImpl.java 5308 2009-10-08 13:20:39Z jburel $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -41,7 +41,7 @@ import ome.parameters.Parameters;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 5308 $ $Date:
  *          2005/06/12 23:27:31 $) </small>
  * @since OME2.2
  */
@@ -57,7 +57,7 @@ public class PixelsImpl extends AbstractLevel2Service implements IPixels {
 	}
 
 	/** Standard rendering definition HQL query prefix */
-	private static final String RENDERING_DEF_QUERY_PREFIX =
+	public static final String RENDERING_DEF_QUERY_PREFIX =
 		"select rdef from RenderingDef as rdef " + 
 		"left outer join fetch rdef.details.owner " + 
 		"left outer join fetch rdef.quantization " + 
@@ -78,6 +78,7 @@ public class PixelsImpl extends AbstractLevel2Service implements IPixels {
 				+ "left outer join fetch c.logicalChannel as lc "
 				+ "left outer join fetch c.statsInfo "
 				+ "left outer join fetch lc.photometricInterpretation "
+				+ "left outer join fetch lc.illumination "
 				+ "where p.id = :id",
 				new Parameters().addId(pixId));
 		return p;
@@ -268,8 +269,7 @@ public class PixelsImpl extends AbstractLevel2Service implements IPixels {
 		image.setName(name);
 		image.setDescription(description);
 		image.setAcquisitionDate(new Timestamp(new Date().getTime()));
-		image.addPixels(pixels);
-
+	
 		// Check that the channels in the list are valid. 
 		if (channelList == null || channelList.size() == 0)
 		{
@@ -292,7 +292,9 @@ public class PixelsImpl extends AbstractLevel2Service implements IPixels {
 		pixels.setDimensionOrder(getEnumeration(DimensionOrder.class, "XYZCT")); 
 		// Create channel data.
 		List<Channel> channels = createChannels(channelList);
-		pixels.addChannelSet(channels);
+		for(Channel channel : channels)
+			pixels.addChannel(channel);
+		image.addPixels(pixels);
 
 		// Save and return our newly created Image Id
 		image = iUpdate.saveAndReturnObject(image);
@@ -402,7 +404,12 @@ public class PixelsImpl extends AbstractLevel2Service implements IPixels {
 			Channel channel = new Channel();
 			LogicalChannel lc = new LogicalChannel();
 			channel.setLogicalChannel(lc);
+			StatsInfo info = new StatsInfo();
+			info.setGlobalMin(0.0);
+			info.setGlobalMax(1.0);
+			channel.setStatsInfo(info);
 			lc.setEmissionWave(wavelength);
+			channels.add(channel);
 		}
 		return channels;
 	}

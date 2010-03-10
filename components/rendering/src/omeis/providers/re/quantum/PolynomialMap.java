@@ -23,11 +23,11 @@ package omeis.providers.re.quantum;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 4421 $ $Date:
  *          2005/06/10 17:37:26 $) </small>
  * @since OME2.2
  */
-class PolynomialMap implements QuantumMap {
+public class PolynomialMap implements QuantumMap {
 
     /**
      * Implemented as specified in {@link QuantumMap}.

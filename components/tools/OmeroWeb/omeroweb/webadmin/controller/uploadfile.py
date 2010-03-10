@@ -23,7 +23,10 @@
 #
 
 import omero
+
+import omero.rtypes
 from omero.rtypes import *
+
 from omero_model_ExperimenterAnnotationLinkI import ExperimenterAnnotationLinkI
 from omero_model_FileAnnotationI import FileAnnotationI
 from omero_model_OriginalFileI import OriginalFileI
@@ -40,9 +43,9 @@ class BaseUploadFile(BaseController):
         if has is not None:
             if newFile.content_type.startswith("image"):
                 f = newFile.content_type.split("/") 
-                format = self.conn.getFileFormt(f[1].upper())
+                format = self.conn.getFileFormat(f[1].upper())
             else:
-                format = self.conn.getFileFormt(newFile.content_type)
+                format = self.conn.getFileFormat(newFile.content_type)
             
             oFile = has._obj.file
             oFile.setName(rstring(str(newFile.name)));
@@ -50,7 +53,7 @@ class BaseUploadFile(BaseController):
             oFile.setSize(rlong(long(newFile.size)));
             oFile.setSha1(rstring("pending"));
             oFile.setFormat(format);
-            self.objectPermissions(oFile, {'owner':'rw', 'group':'r', 'world':'r'})
+            self.setObjectPermissions(oFile, {'owner':'rw', 'group':'r', 'world':'r'})
             self.conn.saveFile(newFile, oFile.id.val)
             has._obj.setFile(oFile)
             self.conn.saveObject(has._obj)
@@ -58,16 +61,16 @@ class BaseUploadFile(BaseController):
         else:
             if newFile.content_type.startswith("image"):
                 f = newFile.content_type.split("/") 
-                format = self.conn.getFileFormt(f[1].upper())
+                format = self.conn.getFileFormat(f[1].upper())
             else:
-                format = self.conn.getFileFormt(newFile.content_type)
+                format = self.conn.getFileFormat(newFile.content_type)
             oFile = OriginalFileI()
             oFile.setName(rstring(str(newFile.name)));
             oFile.setPath(rstring(str(newFile.name)));
             oFile.setSize(rlong(long(newFile.size)));
             oFile.setSha1(rstring("pending"));
             oFile.setFormat(format);
-            self.objectPermissions(oFile, {'owner':'rw', 'group':'r', 'world':'r'})
+            self.setObjectPermissions(oFile, {'owner':'rw', 'group':'r', 'world':'r'})
 
             of = self.conn.saveAndReturnObject(oFile);
             self.conn.saveFile(newFile, of.id)
@@ -75,11 +78,11 @@ class BaseUploadFile(BaseController):
             fa = FileAnnotationI()
             fa.setFile(of._obj)
             fa.setNs(rstring("openmicroscopy.org/omero/experimenter/photo"))
-            self.objectPermissions(fa, {'owner':'rw', 'group':'r', 'world':'r'})
+            self.setObjectPermissions(fa, {'owner':'rw', 'group':'r', 'world':'r'})
             l_ea = ExperimenterAnnotationLinkI()
-            l_ea.setParent(self.conn.getUser())
+            l_ea.setParent(self.conn.getUser()._obj)
             l_ea.setChild(fa)
-            self.objectPermissions(l_ea, {'owner':'rw', 'group':'r', 'world':'r'})
+            self.setObjectPermissions(l_ea, {'owner':'rw', 'group':'r', 'world':'r'})
             self.conn.saveObject(l_ea)
         
 

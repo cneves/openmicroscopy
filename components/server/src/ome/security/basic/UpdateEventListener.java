@@ -26,12 +26,12 @@ import org.hibernate.event.PreUpdateEventListener;
  * events shortly before being saved.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2672 $, $Date: 2008-08-06 10:39:04 +0100 (Wed, 06 Aug 2008) $
  * @see BasicSecuritySystem
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-08-06 10:39:04 +0100 (Wed, 06 Aug 2008) $")
+@RevisionNumber("$Revision: 2672 $")
 public class UpdateEventListener implements PreUpdateEventListener {
 
     public final static String UPDATE_EVENT = "UpdateEvent";

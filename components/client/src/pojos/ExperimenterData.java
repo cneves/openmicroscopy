@@ -28,7 +28,7 @@ import ome.util.CBlock;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date$)
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 3281 $ $Date: 2009-01-12 08:49:38 +0000 (Mon, 12 Jan 2009) $)
  *          </small>
  * @since OME2.2
  */

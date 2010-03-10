@@ -27,13 +27,13 @@ import ome.system.ServiceFactory;
  * See https://trac.openmicroscopy.org.uk/omero/ticket/464
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1208 $, $Date: 2007-01-24 16:23:09 +0000 (Wed, 24 Jan 2007) $
  * @see Configuration
  * @see Task
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-01-24 16:23:09 +0000 (Wed, 24 Jan 2007) $")
+@RevisionNumber("$Revision: 1208 $")
 public class AntAdapter extends org.apache.tools.ant.Task {
 
     String task, user, pass, group, type;

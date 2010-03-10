@@ -13,9 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
 
 import net.sf.ehcache.Ehcache;
 import net.sf.ehcache.Element;
@@ -98,6 +96,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
     protected long maxUserTimeToLive;
     protected PrincipalHolder principalHolder;
     protected CounterFactory factory;
+    protected boolean readOnly = false;
 
     // Local state
 
@@ -163,6 +162,10 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         this.factory = factory;
     }
 
+    public void setReadOnly(boolean readOnly) {
+        this.readOnly = readOnly;
+    }
+
     /**
      * Initialization method called by the Spring run-time to acquire an initial
      * {@link Session}.
@@ -200,7 +203,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         s.setTimeToLive(live);
         s.setDefaultEventType(eventType);
         s.setDefaultPermissions(umask.toString());
-        s.getDetails().setPermissions(Permissions.USER_PRIVATE);
+        s.getDetails().setPermissions(Permissions.DEFAULT);
     }
 
     // ~ Session management
@@ -273,7 +276,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         }
 
         List rv;
-        if (false) { // Introduced in trunk for having read-only nodes. i.e. unneeded
+        if (readOnly) {
             rv = (List) executor.execute(this.asroot, new Executor.SimpleWork(
                     this, "read-only createSession") {
                 @Transactional(readOnly = true)

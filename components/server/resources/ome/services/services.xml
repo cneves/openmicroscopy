@@ -3,7 +3,7 @@
 <!--
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# $Id$
+# $Id: services.xml 3759 2009-02-24 10:28:34Z jmoore $
 #
 # Copyright 2006 University of Dundee. All rights reserved.
 # Use is subject to license terms supplied in LICENSE.txt
@@ -89,9 +89,7 @@
 		       id="serviceHandler"
 		    class="ome.services.util.ServiceHandler"
 		lazy-init="true">
-		<constructor-arg index="0" ref="currentDetails"/>
-		<constructor-arg index="1" value="${omero.throttling.method_time.warn}"/>
-		<constructor-arg index="2" value="${omero.throttling.method_time.error}"/>
+		<constructor-arg ref="currentDetails"/>
 	</bean>
 
 	<bean id="profile"

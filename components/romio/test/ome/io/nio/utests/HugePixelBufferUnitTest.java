@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: HugePixelBufferUnitTest.java 3841 2009-02-26 13:08:12Z callan $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

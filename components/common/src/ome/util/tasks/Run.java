@@ -37,8 +37,8 @@ import ome.system.ServiceFactory;
  * @see Task
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-01-04 14:16:55 +0000 (Fri, 04 Jan 2008) $")
+@RevisionNumber("$Revision: 2009 $")
 public class Run {
 
     /**

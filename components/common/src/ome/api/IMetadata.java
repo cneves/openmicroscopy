@@ -82,6 +82,27 @@ public interface IMetadata
     public static final String EDITOR_EXPERIMENT_NS = 
     	"openmicroscopy.org/omero/editor/experiment";
     
+    /** 
+     * The name space used to indicate that the <code>FileAnnotation</code> 
+     * is an <code>MPEG</code> file.
+     */
+    public static final String MOVIE_MPEG_NS = 
+    	"openmicroscopy.org/omero/movie/mpeg";
+
+    /** 
+     * The name space used to indicate that the <code>FileAnnotation</code> 
+     * is an <code>QT</code> file.
+     */
+    public static final String MOVIE_QT_NS = 
+    	"openmicroscopy.org/omero/movie/qt";
+    
+	/** 
+     * The name space used to indicate that the <code>FileAnnotation</code> 
+     * is an <code>WMV</code> file.
+     */
+    public static final String MOVIE_WMV_NS = 
+    	"openmicroscopy.org/omero/movie/wmv";
+    
 	/**
 	 * Loads the <code>logical channels</code> and the acquisition metadata 
 	 * related to them.
@@ -107,7 +128,7 @@ public interface IMetadata
      * 
      * @param nodeType The type of the nodes the annotations are linked to. 
      *                 Mustn't be <code>null</code>.
-     * @param nodeIds  Ids of the objects of type <code>rootNodeType</code>.
+     * @param rootNodeIds  Ids of the objects of type <code>rootNodeType</code>.
      * 				   Mustn't be <code>null</code>.
      * @param annotationType The types of annotation to retrieve. 
      * 						 If <code>null</code> all annotations will be
@@ -135,7 +156,7 @@ public interface IMetadata
      * 					defined by this class.
      * @param exclude   The collection of name space, one of the constants 
      * 					defined by this class.
-     * @param options	The pojo options.
+     * @param options	The POJO options.
      * @return A collection of found annotations.
      */
     public <A extends Annotation> Set<A> loadSpecifiedAnnotations(
@@ -144,15 +165,11 @@ public interface IMetadata
     		@Validate(String.class) Set<String> exclude, Parameters options);
     
     /**
-     * Loads the Tag Set if the id is specified otherwis loads all the Tag
+     * Loads the Tag Set if the id is specified otherwise loads all the Tag
      * Set.
      * 
-     * @param id			The id of the tag to load or <code>-1</code>.
-     * @param withObjects	Pass <code>true</code> to load the data objects
-     * 						related to the <code>Tags</code>. Note that a 
-     * 						<code>Tag Set</code> can only be linked to a
-     * 						<code>Tag</code>.
-     * @param options		The pojo options.
+     * @param tagIds	The id of the tag to load or <code>-1</code>.
+     * @param options	The POJO options.
      * @return Map whose key is a <code>Tag/Tag Set</code> and the value
      * 		   either a Map or a list of related <code>DataObject</code>.
      */
@@ -167,7 +184,7 @@ public interface IMetadata
      * Note that the difference between a Tag Set and a Tag is made
      * using the name space {@link #NS_INSIGHT_TAG_SET}.
      * 
-     * @param options The pojo options.
+     * @param options The POJO options.
      * @return See above.
      */
     public Set<IObject> loadTagSets(Parameters options);
@@ -177,7 +194,7 @@ public interface IMetadata
      * Projects, Datasets, and Images linked to that tag.
      * 
      * @param tagIds The collection of ids.
-     * @param options The pojo options.
+     * @param options The POJO options.
      * @return See above.
      */
     public Map<Long, Long> getTaggedObjectsCount(@NotNull @Validate(Long.class) 
@@ -191,7 +208,7 @@ public interface IMetadata
      * 					defined by this class.
      * @param exclude   The collection of name space, one of the constants 
      * 					defined by this class.
-     * @param options	The pojo options.
+     * @param options	The POJO options.
      * @return See above.
      */
     public Long countSpecifiedAnnotations(@NotNull Class type, 
@@ -206,5 +223,13 @@ public interface IMetadata
      */
     public <A extends Annotation> Set<A> loadAnnotation(
     		@NotNull @Validate(Long.class) Set<Long> annotationIds);
+    
+    /**
+     * Loads the instrument and its components i.e. detectors, objectives, etc.
+     * 
+     * @param id The id of the instrument to load.
+     * @return See above
+     */
+    public Set<IObject> loadInstrument(long id);
     
 }

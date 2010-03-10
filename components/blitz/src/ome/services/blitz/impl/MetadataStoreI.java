@@ -7,13 +7,21 @@
 
 package ome.services.blitz.impl;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import ome.conditions.InternalException;
 import ome.formats.OMEROMetadataStore;
 import ome.model.IObject;
+import ome.model.core.Pixels;
+import ome.model.screen.Plate;
 import ome.services.blitz.util.BlitzExecutor;
 import ome.services.blitz.util.BlitzOnly;
 import ome.services.blitz.util.ServiceFactoryAware;
+import ome.services.roi.PopulateRoiJob;
 import ome.services.throttling.Adapter;
 import ome.services.util.Executor;
 import ome.system.OmeroContext;
@@ -24,15 +32,27 @@ import omero.RDouble;
 import omero.RFloat;
 import omero.RInt;
 import omero.RLong;
+import omero.RMap;
 import omero.RString;
-import omero.RType;
 import omero.ServerError;
-import omero.api.*;
+import omero.api.AMD_MetadataStore_createRoot;
+import omero.api.AMD_MetadataStore_populateMinMax;
+import omero.api.AMD_MetadataStore_saveToDB;
+import omero.api.AMD_MetadataStore_updateObjects;
+import omero.api.AMD_MetadataStore_updateReferences;
+import omero.api.AMD_StatefulServiceInterface_activate;
+import omero.api.AMD_StatefulServiceInterface_close;
+import omero.api.AMD_StatefulServiceInterface_getCurrentEventContext;
+import omero.api.AMD_StatefulServiceInterface_passivate;
+import omero.api._MetadataStoreOperations;
+import omero.grid.InteractiveProcessorPrx;
+import omero.grid.SharedResourcesPrx;
 import omero.metadatastore.IObjectContainer;
-import omero.model.PlaneInfo;
-import omero.model.Project;
+import omero.model.ScriptJob;
 import omero.util.IceMapper;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.hibernate.Session;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,12 +64,19 @@ import Ice.UserException;
 public class MetadataStoreI extends AbstractAmdServant implements
         _MetadataStoreOperations, ServiceFactoryAware, BlitzOnly {
 
+    private final static Log log = LogFactory.getLog(MetadataStoreI.class);
+
+    protected final Set<Long> savedPlates = new HashSet<Long>();
+
     protected OMEROMetadataStore store;
 
     protected ServiceFactoryI sf;
+    
+    protected PopulateRoiJob popRoi;
 
-    public MetadataStoreI(final BlitzExecutor be) throws Exception {
+    public MetadataStoreI(final BlitzExecutor be, PopulateRoiJob popRoi) throws Exception {
         super(null, be);
+        this.popRoi = popRoi;
     }
 
     public void setServiceFactory(ServiceFactoryI sf) throws ServerError {
@@ -68,6 +95,32 @@ public class MetadataStoreI extends AbstractAmdServant implements
             return (T) mapper.reverse(o);
         } catch (Exception e) {
             throw new RuntimeException("Failed to safely reverse: " + o);
+        }
+    }
+
+    /**
+     * Called during
+     * {@link #saveToDB_async(AMD_MetadataStore_saveToDB, Current)} to prepare
+     * the list of pixels for post-processing.
+     * 
+     * @see #processing()
+     */
+    private void parsePixels(List<Pixels> pixels) {
+        synchronized (savedPlates) {
+            for (Pixels p : pixels) {
+                ome.model.core.Image i = p.getImage();
+                if (i != null) {
+                    for (ome.model.screen.WellSample ws : i.unmodifiableWellSamples()) {
+                        ome.model.screen.Well w = ws.getWell();
+                        if (w != null) {
+                            Plate plate = w.getPlate();
+                            if (plate != null) {
+                                savedPlates.add(plate.getId());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -91,8 +144,8 @@ public class MetadataStoreI extends AbstractAmdServant implements
 
     public void populateMinMax_async(
             final AMD_MetadataStore_populateMinMax __cb,
-			final double[][][] imageChannelGlobalMinMax,
-			final Current __current) throws ServerError {
+            final double[][][] imageChannelGlobalMinMax, final Current __current)
+            throws ServerError {
 
         final IceMapper mapper = new IceMapper(IceMapper.VOID);
         runnableCall(__current, new Adapter(__cb, __current, mapper,
@@ -116,8 +169,9 @@ public class MetadataStoreI extends AbstractAmdServant implements
                         this, "saveToDb") {
                     @Transactional(readOnly = false)
                     public Object doWork(Session session, ServiceFactory sf) {
-
-                        return store.saveToDB();
+                        List<Pixels> pix = store.saveToDB();
+                        parsePixels(pix);
+                        return pix;
                     }
                 }));
     }
@@ -149,7 +203,7 @@ public class MetadataStoreI extends AbstractAmdServant implements
     }
 
     public void updateReferences_async(AMD_MetadataStore_updateReferences __cb,
-            final Map<String, String> references, Current __current)
+            final Map<String, String[]> references, Current __current)
             throws ServerError {
         final IceMapper mapper = new IceMapper(IceMapper.VOID);
         runnableCall(__current, new Adapter(__cb, __current, mapper,
@@ -159,6 +213,66 @@ public class MetadataStoreI extends AbstractAmdServant implements
                     public Object doWork(Session session, ServiceFactory sf) {
                         store.updateReferences(references);
                         return null;
+                    }
+                }));
+    }
+    
+    /**
+     * Called after some number of Passes the {@link #savedPixels} to a
+     * background processor for further work. This happens on
+     * {@link #close_async(AMD_StatefulServiceInterface_close, Current)} since
+     * no further pixels can be created, but also on
+     * {@link #createRoot_async(AMD_MetadataStore_createRoot, Current)} which is
+     * used by the client to reset the status of this instance. To prevent any
+     * possible
+     */
+    public void postProcess_async(omero.api.AMD_MetadataStore_postProcess __cb, Current __current)
+    throws ServerError {
+        
+        final IceMapper mapper = new IceMapper(IceMapper.UNMAPPED);
+
+        final List<Long> copy = new ArrayList<Long>();
+        
+        final List<InteractiveProcessorPrx> procs = new ArrayList<InteractiveProcessorPrx>();
+        
+        runnableCall(__current, new Adapter(__cb, __current, mapper,
+                this.sf.executor, this.sf.principal, new Executor.SimpleWork(
+                        this, "postProcess") {
+                    @Transactional(readOnly = true)
+                    public Object doWork(Session session, ServiceFactory _sf) {
+
+                        synchronized (savedPlates) {
+
+                            copy.addAll(savedPlates);
+                            if (copy.size() == 0) {
+                                return null;
+                            }
+                            
+                            for (Long id : copy) {
+                                
+                                RMap inputs = omero.rtypes.rmap("plate_id",
+                                        omero.rtypes.rlong(id));
+                                
+                                ScriptJob job = popRoi.createJob();
+                                InteractiveProcessorPrx prx;
+                                try {
+                                    SharedResourcesPrx sr = sf.sharedResources();
+                                    prx = sr.acquireProcessor(job, 15);
+                                    prx.execute(inputs);
+                                    prx.setDetach(true);
+                                    procs.add(prx);
+                                    log.info("Launched populateroi.py on plate " + id);
+                                } catch (ServerError e) {
+                                    String msg = "Error acquiring post processor";
+                                    log.error(msg, e);
+                                    throw new InternalException(msg);
+                                }
+                            
+                            }
+                            
+                            savedPlates.clear();
+                            return procs;
+                        }
                     }
                 }));
     }
@@ -238,73 +352,10 @@ public class MetadataStoreI extends AbstractAmdServant implements
     // Stateful interface methods
     // =========================================================================
 
-    public void activate_async(AMD_StatefulServiceInterface_activate __cb,
-            Current __current) {
-        final IceMapper mapper = new IceMapper(IceMapper.VOID);
-        runnableCall(__current, new Adapter(__cb, __current, mapper,
-                this.sf.executor, this.sf.principal, new Executor.SimpleWork(
-                        this, "activate") {
-                    @Transactional(readOnly = true)
-                    public Object doWork(Session session, ServiceFactory sf) {
-                        // Do nothing for now.
-                        return null;
-                    }
-                }));
-
-    }
-
-    public void passivate_async(AMD_StatefulServiceInterface_passivate __cb,
-            Current __current) {
-        final IceMapper mapper = new IceMapper(IceMapper.VOID);
-        runnableCall(__current, new Adapter(__cb, __current, mapper,
-                this.sf.executor, this.sf.principal, new Executor.SimpleWork(
-                        this, "passivate") {
-                    @Transactional(readOnly = true)
-                    public Object doWork(Session session, ServiceFactory sf) {
-                        // Do nothing for now.
-                        return null;
-                    }
-                }));
-
-    }
-
-    public void close_async(final AMD_StatefulServiceInterface_close __cb,
-            final Current __current) throws ServerError {
-
-        final IceMapper mapper = new IceMapper(IceMapper.VOID);
-        runnableCall(__current, new Adapter(__cb, __current, mapper,
-                this.sf.executor, this.sf.principal, new Executor.SimpleWork(
-                        this, "close") {
-                    @Transactional(readOnly = true)
-                    public Object doWork(Session session, ServiceFactory sf) {
-
-                        // Nulling should be sufficient.
-                        store = null;
-                        return null;
-                    }
-                }));
-    }
-
-    public void getCurrentEventContext_async(
-            final AMD_StatefulServiceInterface_getCurrentEventContext __cb,
-            final Current __current) throws ServerError {
-
-        final IceMapper mapper = new IceMapper(new IceMapper.ReturnMapping() {
-
-            public Object mapReturnValue(IceMapper mapper, Object value)
-                    throws UserException {
-                return mapper.convert((ome.system.EventContext) value);
-            }
-        });
-
-        runnableCall(__current, new Adapter(__cb, __current, mapper,
-                this.sf.executor, this.sf.principal, new Executor.SimpleWork(
-                        this, "getCurrentEventContext") {
-                    @Transactional(readOnly = true)
-                    public Object doWork(Session session, ServiceFactory sf) {
-                        return null;
-                    }
-                }));
+    @Override
+    protected void preClose() {
+        // Nulling should be sufficient.
+        store = null;
     }
 
 }

@@ -9,6 +9,7 @@ package ome.api;
 
 // Java imports
 import java.util.Collection;
+import java.util.List;
 
 import ome.annotations.Validate;
 import ome.conditions.ValidationException;
@@ -28,6 +29,15 @@ import ome.model.IObject;
  * <b>should be discarded</b>.
  * </p>
  * 
+ * <p>{@link #saveAndReturnIds(IObject[])} behaves slightly differently in that
+ * it does <em>not</em> handle object modifications. The graph of objects
+ * passed in can consist <em>ONLY</em> if either newly created objects without
+ * ids or of unloaded objects with ids. <em>Note:</em> The ids of the saved values
+ * may not be in order. This is caused by persistence-by-transitivity. Hibernate
+ * may detect an item later in the array if they are interconnected and therefore
+ * choose to save it first.
+ * </p>
+ * 
  * <p>
  * All methods throw {@link ome.conditions.ValidationException} if the input
  * objects do not pass validation, and
@@ -37,7 +47,7 @@ import ome.model.IObject;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 5216 $ $Date: 2009-10-03 20:20:36 +0100 (Sat, 03 Oct 2009) $) </small>
  * @since OMERO3.0
  * @see ome.util.Validation
  * @see ome.logic.UpdateImpl
@@ -45,6 +55,10 @@ import ome.model.IObject;
  */
 public interface IUpdate extends ServiceInterface {
 
+    /** Logic differs from other methods. See class description
+     * @see ome.api.IUpdate */
+    List<Long> saveAndReturnIds(IObject[] objects);
+    
     /** @see ome.api.IUpdate */
     void saveCollection(@Validate(IObject.class)
     Collection<IObject> graph);

@@ -1,6 +1,8 @@
 """
     OMERO.fs Util module.
 
+    Copyright 2009 University of Dundee. All rights reserved.
+    Use is subject to license terms supplied in LICENSE.txt
 
 """
 
@@ -24,9 +26,10 @@ def monitorPackage():
     # Currently supported platforms
     supported = { 
                   'MACOS_10_5+'                : 'fsMac-10-5-Monitor', 
-                  'LINUX_2_6_13+pyinotify_0_7' : 'fsPyinotify-0-7-Monitor', 
-                  'LINUX_2_6_13+pyinotify_0_8' : 'fsPyinotify-0-8-Monitor', 
+                  'LINUX_2_6_13+pyinotify_0_7' : 'fsPyinotifyMonitor', 
+                  'LINUX_2_6_13+pyinotify_0_8' : 'fsPyinotifyMonitor', 
                   'WIN_XP'                     : 'fsWin-XP-Monitor', 
+                  'WIN_2003Server'             : 'fsWin-XP-Monitor', 
                 }
     
     # Initial state
@@ -62,46 +65,48 @@ def monitorPackage():
         if int(kernel[0]) == 2 and int(kernel[1]) == 6 and int(kernel[2]) >= 13:
             try:
                 # pyinotify versions have slightly different APIs
-                # so the version needs to be determined.
+                # so the version needs to be determined. They also
+                # interact differently with different python versions
+                # so the python version is also needed.
                 import pyinotify
+                import sys
                 try:
                     # 0.8.x has a __version__ attribute.
                     version = pyinotify.__version__.split('.')
                     if int(version[0]) == 0 and int(version[1]) == 8:
-                        current = 'LINUX_2_6_13+pyinotify_0_8'
+                        try:
+                            pyinotify.PyinotifyLogger
+                            current = 'LINUX_2_6_13+pyinotify_0_8'
+                        except AttributeError:
+                            if sys.version[:3] == '2.5':
+                                current = 'LINUX_2_6_13+pyinotify_0_8'
+                            else:
+                                errorString = "pynotify version %s is not compatible with Python 2.4. Install 0.8.5 or lower to use DropBox" % pyinotify.__version__ 
                     # This pyinotofy has a __version__ attribute but isn't 0.8.
                     else:
-                        errorString = "Pyinotify 0.7 or above required. Unknown version found: " + version
+                        errorString = "pyinotify 0.7 or 0.8 required. Unknown version found."
                 except:
                     # 0.7.x doesn't have a __version__ attribute but there is
                     # a possibility that the installed version is 0.6 or less.
                     # That isn't tested for and might be a point of failure.
-                    from pyinotify import EventsCodes
-                    try:
-                        EventsCodes.IN_CLOSE_WRITE
-                        current = 'LINUX_2_6_13+pyinotify_0_7'
-                    except:
-                        errorString = "Pyinotify 0.7 or above required. Package failed to import."
-            except Exception, e:
-                errorString = "Pyinotify 0.7 or above required. Package not found. Reason:" + str(e)
+                    current = 'LINUX_2_6_13+pyinotify_0_7'
+            except:
+                errorString = "pyinotify 0.7 or 0.8 required. Package not found."
         # Unsupported Linux kernel version.    
         else:
             errorString = "Linux kernel 2.6.13 or above required. "
             errorString += "You have: %s" % str(platform.platform().split('-')[1])
-    
+
     # Windows of some flavour.
     elif system == 'Windows':
         version = platform.platform().split('-')
         if version[1] == 'XP':
-            # Although there is a working monitor system for XP the whole blitzed
-            # FS system has yet to be deployed against an XP blitz server. Thus the
-            # option is forced to fail until this deployment is tested.
-            #current = 'WIN_XP-NOT_YET_SUPPORTED'
-            #errorString = "Windows XP not yet supported."
             current = 'WIN_XP'
+        elif version[1] == '2003Server':
+            current = 'WIN_2003Server'
         else:
-            errorString = "Windows XP required. You have: %s" % str(version)
-    
+            errorString = "Windows XP or 2003Server required. You have: %s" % str(version)
+
     # Unknown OS.
     else:
         errorString = "Unsupported platform: %s" % system
@@ -110,8 +115,4 @@ def monitorPackage():
         return supported[current]
     except:
         raise Exception("Libraries required by OMERO.fs monitor unavailable: " + errorString)
-
-   
-if __name__ == "__main__":
-    print "IMPORTED:"
-    print str(monitorPackage())
+    

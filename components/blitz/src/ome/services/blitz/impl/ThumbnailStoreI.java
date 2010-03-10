@@ -19,6 +19,7 @@ import omero.api.AMD_StatefulServiceInterface_passivate;
 import omero.api.AMD_StatefulServiceInterface_getCurrentEventContext;
 import omero.api.AMD_ThumbnailStore_createThumbnail;
 import omero.api.AMD_ThumbnailStore_createThumbnails;
+import omero.api.AMD_ThumbnailStore_createThumbnailsByLongestSideSet;
 import omero.api.AMD_ThumbnailStore_getThumbnail;
 import omero.api.AMD_ThumbnailStore_getThumbnailByLongestSide;
 import omero.api.AMD_ThumbnailStore_getThumbnailByLongestSideDirect;
@@ -61,6 +62,13 @@ public class ThumbnailStoreI extends AbstractAmdServant implements
             AMD_ThumbnailStore_createThumbnails __cb, Current __current)
             throws ServerError {
         callInvokerOnRawArgs(__cb, __current);
+
+    }
+    
+    public void createThumbnailsByLongestSideSet_async(
+            AMD_ThumbnailStore_createThumbnailsByLongestSideSet __cb, RInt size,
+            List<Long> pixelsIds, Current __current) throws ServerError {
+        callInvokerOnRawArgs(__cb, __current, size, pixelsIds);
 
     }
 
@@ -143,34 +151,6 @@ public class ThumbnailStoreI extends AbstractAmdServant implements
     public void thumbnailExists_async(AMD_ThumbnailStore_thumbnailExists __cb,
             RInt sizeX, RInt sizeY, Current __current) throws ServerError {
         callInvokerOnRawArgs(__cb, __current, sizeX, sizeY);
-
-    }
-
-    // Stateful interface methods
-    // =========================================================================
-
-    public void activate_async(AMD_StatefulServiceInterface_activate __cb,
-            Current __current) {
-        callInvokerOnRawArgs(__cb, __current);
-
-    }
-
-    public void passivate_async(AMD_StatefulServiceInterface_passivate __cb,
-            Current __current) {
-        callInvokerOnRawArgs(__cb, __current);
-
-    }
-
-    public void close_async(AMD_StatefulServiceInterface_close __cb,
-            Current __current) {
-        callInvokerOnRawArgs(__cb, __current);
-
-    }
-
-    public void getCurrentEventContext_async(
-            AMD_StatefulServiceInterface_getCurrentEventContext __cb,
-            Current __current) throws ServerError {
-        callInvokerOnRawArgs(__cb, __current);
 
     }
 

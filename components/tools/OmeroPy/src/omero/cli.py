@@ -20,14 +20,14 @@ See LICENSE for details.
 
 """
 
-import cmd, string, re, os, sys, subprocess, socket, exceptions, traceback, glob, platform, time
+sys = __import__("sys")
+
+import cmd, string, re, os, subprocess, socket, exceptions, traceback, glob, platform, time
 import shlex as pyshlex
 from exceptions import Exception as Exc
 from threading import Thread, Lock
 from omero_version import omero_version
-from omero_ext import pysys
 from path import path
-import Ice
 
 #
 # Static setup
@@ -45,7 +45,11 @@ TEXT="""
 """ % str(VERSION)
 
 OMEROCLI = path(__file__).expand().dirname()
-OMERODIR = OMEROCLI.dirname().dirname().dirname()
+OMERODIR = os.getenv('OMERODIR', None)
+if OMERODIR is not None:
+    OMERODIR = path(OMERODIR)
+else:
+    OMERODIR = OMEROCLI.dirname().dirname().dirname()
 
 COMMENT = re.compile("^\s*#")
 RELFILE = re.compile("^\w")
@@ -88,14 +92,14 @@ class Arguments:
         - the shlex'd line as a string list
 
     To simplify usage, this class can be used at the beginning of every
-    method so:
-
+    method so::
+    
         def method(self, args):
             args = Arguments(args)
 
     and it will handle the above cases as well as wrapping other Argument
     instances. If the method takes varargs and it is desired to test for
-    single argument of the above type, then use:
+    single argument of the above type, then use::
 
         args = Arguments(*args)
 
@@ -113,7 +117,7 @@ class Arguments:
             self.make_argmap()
         elif isinstance(args, list):
             for l in args:
-                assert isinstance(l, str)
+                assert (isinstance(l, str) or isinstance(l, unicode))
             self.args = args
             self.make_argmap()
         else:
@@ -199,14 +203,14 @@ class Context:
         Prints text to a given string, caputring any exceptions.
         """
         try:
-            stream.write(text % {"program_name": pysys.argv[0]})
+            stream.write(text % {"program_name": sys.argv[0]})
             if newline:
                 stream.write("\n")
             else:
                 stream.flush()
         except:
-            print >>pysys.stderr, "Error printing text"
-            print >>pysys.stdout, text
+            print >>sys.stderr, "Error printing text"
+            print >>sys.stdout, text
             if self.isdebug:
                 traceback.print_exc()
 
@@ -218,7 +222,7 @@ class Context:
         Note: this was initially created for running during
         testing when PYTHONPATH is not properly set.
         """
-        path = list(pysys.path)
+        path = list(sys.path)
         for i in range(0,len(path)-1):
             if path[i] == '':
                 path[i] = os.getcwd()
@@ -240,7 +244,7 @@ class Context:
         return dir
 
     def pub(self, args):
-        self.safePrint(str(args), pysys.stdout)
+        self.safePrint(str(args), sys.stdout)
 
     def input(self, prompt, hidden = False):
         """
@@ -258,13 +262,13 @@ class Context:
         """
         Expects as single string as argument"
         """
-        self.safePrint(text, pysys.stdout, newline)
+        self.safePrint(text, sys.stdout, newline)
 
     def err(self, text, newline = True):
         """
         Expects a single string as argument.
         """
-        self.safePrint(text, pysys.stderr, newline)
+        self.safePrint(text, sys.stderr, newline)
 
     def dbg(self, text, newline = True):
         """
@@ -296,12 +300,12 @@ class Context:
 class BaseControl:
     """Controls get registered with a CLI instance on loadplugins().
 
-    To create a new control, subclass BaseControl and end your module with:
+    To create a new control, subclass BaseControl and end your module with::
 
-    try:
-        registry("name", MyControl)
-    except:
-        MyControl()._main()
+        try:
+            registry("name", MyControl)
+        except:
+            MyControl()._main()
 
     This module should be put in the omero.plugins package.
 
@@ -462,6 +466,7 @@ class BaseControl:
         getPropertiesForPrefix(prefix) where the default is
         to return all properties.
         """
+        import Ice
         if not hasattr(self, "_props") or self._props == None:
             self._props = Ice.createProperties()
             for cfg in self._cfglist():
@@ -470,6 +475,20 @@ class BaseControl:
                 except Exc, exc:
                     self.ctx.die(3, "Could not find file: "+cfg + "\nDid you specify the proper node?")
         return self._props.getPropertiesForPrefix(prefix)
+
+    def _ask_for_password(self, reason = "", root_pass = None):
+        while not root_pass or len(root_pass) < 1:
+            root_pass = self.ctx.input("Please enter password%s: "%reason, hidden = True)
+            if root_pass == None or root_pass == "":
+                self.ctx.err("Password cannot be empty")
+                continue
+            confirm = self.ctx.input("Please re-enter password%s: "%reason, hidden = True)
+            if root_pass != confirm:
+                root_pass = None
+                self.ctx.err("Passwords don't match")
+                continue
+            break
+        return root_pass
 
     ###############################################
     #
@@ -557,10 +576,10 @@ class BaseControl:
         but it may be useful for testing purposes.
         """
         if __name__ == "__main__":
-            if not self._likes(pysys.argv[1:]):
+            if not self._likes(sys.argv[1:]):
                 self.help()
             else:
-                self.__call__(pysys.argv[1:])
+                self.__call__(sys.argv[1:])
 
 class HelpControl(BaseControl):
     """
@@ -596,7 +615,7 @@ See 'help <command>' for more information on syntax
 Type 'quit' to exit
 
 Available commands:
-""" % {"program_name":pysys.argv[0],"version":VERSION}
+""" % {"program_name":sys.argv[0],"version":VERSION}
 
             for name in controls:
                 print """ %s""" % name
@@ -610,7 +629,7 @@ For additional information, see http://trac.openmicroscopy.org.uk/omero/wiki/Ome
                 ##event.extend(other)
                 ##self.ctx.pub(event)
             except KeyError, ke:
-                self.ctx.err("Unknown command:" + first)
+                self.ctx.unknown_command(first)
 
 class CLI(cmd.Cmd, Context):
     """
@@ -749,7 +768,10 @@ class CLI(cmd.Cmd, Context):
             if self.controls.has_key(first):
                 return self.invoke(arg.args)
             else:
-                self.err("Unknown command: " + arg.join(" "))
+                self.unknown_command(first)
+
+    def unknown_command(self, first):
+            self.err("""Unknown command: "%s" Try "help".""" % first)
 
     def completenames(self, text, line, begidx, endidx):
         names = self.controls.keys()
@@ -798,21 +820,44 @@ class CLI(cmd.Cmd, Context):
         except KeyError, ke:
             self.die(11, "Missing required plugin: "+ str(ke))
 
-    def call(self, args, strict = True):
+    def _env(self):
+        """
+        Configure environment with PYTHONPATH as
+        setup by bin/omero
+        """
+        home = str(self.dir / "lib" / "python")
+        env = dict(os.environ)
+        pypath = env.get("PYTHONPATH", None)
+        if pypath is None:
+            pypath = home
+        else:
+            if pypath.endswith(os.path.pathsep):
+                pypath = "%s%s" % (pypath, home)
+            else:
+                pypath = "%s%s%s" % (pypath, os.path.pathsep, home)
+        env["PYTHONPATH"] = pypath
+        return env
+
+    def _cwd(self, cwd):
+        if cwd is None:
+            cwd = str(OMERODIR)
+        else:
+            cwd = str(cwd)
+        return cwd
+
+    def call(self, args, strict = True, cwd = None):
         """
         Calls the string in a subprocess and dies if the return value is not 0
-        If stdout is True, then rather than executing
-        Yes, stdout is something of a misnomer.
         """
         self.dbg("Executing: %s" % args)
-        rv = subprocess.call(args, env = os.environ, cwd = OMERODIR)
+        rv = subprocess.call(args, env = self._env(), cwd = self._cwd(cwd))
         if strict and not rv == 0:
             raise NonZeroReturnCode(rv, "%s => %d" % (" ".join(args), rv))
         return rv
 
-    def popen(self, args):
+    def popen(self, args, cwd = None):
         self.dbg("Returning popen: %s" % args)
-        return subprocess.Popen(args, env = os.environ, cwd = OMERODIR, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        return subprocess.Popen(args, env = self._env(), cwd = self._cwd(cwd), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 
     def readDefaults(self):
         try:
@@ -850,6 +895,8 @@ class CLI(cmd.Cmd, Context):
         import Ice
         data = Ice.InitializationData()
         data.properties = Ice.createProperties()
+        for k,v in properties.items():
+            data.properties.setProperty(k,v)
         self.parsePropertyFile(data, output)
         return data
 
@@ -866,7 +913,7 @@ class CLI(cmd.Cmd, Context):
         import omero
         try:
             data = self.initData(properties)
-            self._client = omero.client(pysys.argv, id = data)
+            self._client = omero.client(sys.argv, id = data)
             self._client.createSession()
             return self._client
         except Exc, exc:
@@ -947,6 +994,8 @@ class CLI(cmd.Cmd, Context):
             if -1 == plugin.find("#"): # Omit emacs files
                 try:
                     execfile( plugin, loc )
+                except KeyboardInterrupt:
+                    raise
                 except:
                     self.err("Error loading:"+plugin)
                     traceback.print_exc()
@@ -955,7 +1004,7 @@ class CLI(cmd.Cmd, Context):
     ## End Cli
     ###########################################################
 
-def argv(args=pysys.argv):
+def argv(args=sys.argv):
     """
     Main entry point for the OMERO command-line interface. First
     loads all plugins by passing them the classes defined here

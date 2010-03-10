@@ -3,7 +3,7 @@
 <!--
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# $Id$
+# $Id: directories.xml 5671 2009-11-10 09:32:59Z jmoore $
 # 
 # Copyright 2006 University of Dundee. All rights reserved.
 # Use is subject to license terms supplied in LICENSE.txt
@@ -54,9 +54,11 @@
 	<property name="OmeroCpp.comp"     value="${tools.comp}/OmeroCpp"/>
 	<property name="OmeroJava.comp"     value="${tools.comp}/OmeroJava"/>
 	<property name="OmeroImporter.comp"     value="${tools.comp}/OmeroImporter"/>
+	<property name="OmeroImageJ.comp"     value="${tools.comp}/OmeroImageJ/Omero_ImageJ"/>
 	<property name="OmeroWeb.comp"     value="${tools.comp}/OmeroWeb"/>
 	<property name="OmeroPy.comp"     value="${tools.comp}/OmeroPy"/>
 	<property name="OmeroFs.comp"     value="${tools.comp}/OmeroFS"/>
+	<property name="OmeroMatlab.comp"     value="${tools.comp}/OmeroM"/>
 
 	<!-- Build Path References -->
 	<path id="blitz.buildpath">
@@ -80,6 +82,9 @@
 	<path id="OmeroImporter.buildpath">
 	  <pathelement location="${OmeroImporter.comp}/build.xml"/>
 	</path>
+	<path id="OmeroImageJ.buildpath">
+	  <pathelement location="${OmeroImageJ.comp}/build.xml"/>
+	</path>
 	<path id="OmeroWeb.buildpath">
 	  <pathelement location="${OmeroWeb.comp}/build.xml"/>
 	</path>
@@ -88,6 +93,9 @@
 	</path>
 	<path id="OmeroJava.buildpath">
 	  <pathelement location="${OmeroJava.comp}/build.xml"/>
+	</path>
+	<path id="OmeroMatlab.buildpath">
+	  <pathelement location="${OmeroMatlab.comp}/build.xml"/>
 	</path>
 	<path id="OmeroPy.buildpath">
 	  <pathelement location="${OmeroPy.comp}/build.xml"/>

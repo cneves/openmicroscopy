@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: QueryImpl.java 4023 2009-03-13 09:31:45Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -45,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Rev: 4023 $ $Date: 2009-03-13 09:31:45 +0000 (Fri, 13 Mar 2009) $) </small>
  * @since 3.0
  *
  */

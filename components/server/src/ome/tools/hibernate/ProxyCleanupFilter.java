@@ -20,6 +20,7 @@ import java.util.Set;
 import ome.api.StatefulServiceInterface;
 import ome.model.IObject;
 import ome.model.internal.Details;
+import ome.model.meta.Node;
 import ome.util.ContextFilter;
 import ome.util.Filterable;
 import ome.util.Utils;
@@ -40,7 +41,7 @@ import org.hibernate.collection.AbstractPersistentCollection;
  * 
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 4572 $ $Date: 2009-07-09 12:51:05 +0100 (Thu, 09 Jul 2009) $) </small>
  * @since 1.0
  */
 public class ProxyCleanupFilter extends ContextFilter {
@@ -57,6 +58,11 @@ public class ProxyCleanupFilter extends ContextFilter {
             return (IObject) unloadedObjectCache.get(f);
         }
 
+        // Filtering all node objects for security reasons
+        if (f instanceof Node) {
+            return new Node((((Node) f).getId()), false);
+        }
+        
         // A proxy; send over the wire in altered form.
         if (!Hibernate.isInitialized(f)) {
 

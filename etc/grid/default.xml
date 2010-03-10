@@ -6,58 +6,48 @@
     Use is subject to license terms supplied in LICENSE.txt
 -->
 
-  <application name="OMERO" import-default-templates="true">
+  <application name="OMERO">
 
-    <variable name="OMERO_HOME"   value="."/>
-    <variable name="OMEROPY_HOME" value="lib/python/"/>
-    <variable name="PYTHONPATH"   value="PYTHONPATH=$${PYTHONPATH}:lib/python"/>
+    <variable name="OMERO_HOME"    value="."/>
+    <variable name="OMERO_ETC"     value="etc/"/>
+    <variable name="OMERO_JARS"    value="lib/server/"/>
+    <variable name="OMERO_LOGS"    value="var/log/"/>
+    <variable name="OMERO_LOGFILE" value="${OMERO_LOGS}$${omero.name}.log"/>
+    <variable name="OMEROPY_HOME"  value="lib/python/"/>
+    <variable name="OMEROPY_SERV"  value="lib/python/omero/"/>
+    <variable name="PYTHONPATH"    value="PYTHONPATH=${OMEROPY_HOME}:$${PYTHONPATH}"/>
+    <variable name="ROUTERPORT"    value="4063"/>
 
     <properties id="Profile">
       <!--
-      Any properties beginning with "omero" set here will
-      be passed to the servers as if via "-Domero.example=value"
-      were set on the command line. These values may be overwritten
-      by `bin/omero config` values.
+        Properties set here will override all properties defined in templates.xml
+        This can be used to keep all your settings in one place, since templates.xml
+        is more likely to change between releases.
+
+        Non-Windows:
+        Also, any properties beginning with "omero" set here will
+        be passed to the servers launched via bin/omero as if via
+        "-Domero.example=value" were set on the command line.
+        These values may be overwritten by `bin/omero config` values.
       -->
-      <property name="omero.example" value="my_value"/>
+      <property name="omero.example"  value="my_value"/>
     </properties>
 
-    <replica-group id="BlitzAdapters">
-      <load-balancing type="adaptive" load-sample="5" n-replicas="2"/>
-      <object identity="BlitzVerifier" type="::Glacier2::PermissionVerifier"/>
-      <object identity="BlitzManager" type="::Glacier2::SessionManager"/>
-    </replica-group>
-
-    <replica-group id="ProcessorAdapters">
-      <!--load-balancing type="adaptive" load-sample="5" n-replicas="2"/-->
-      <load-balancing type="round-robin"/>
-      <object identity="Processor" type="::omero::grid::Processor"/>
-    </replica-group>
+    <include file="templates.xml"/>
 
     <node name="master">
       <server-instance template="Glacier2Template"
-        client-endpoints="tcp -p 4063"
-        session-timeout="300"
+        client-endpoints="tcp -p ${ROUTERPORT}"
         server-endpoints="tcp -h 127.0.0.1"/>
       <server-instance template="BlitzTemplate" index="0" config="default"/>
       <server-instance template="IndexerTemplate" index="0"/>
       <server-instance template="DropBoxTemplate"/>
       <server-instance template="FSTemplate"/>
-      <server-instance template="ProcessorTemplate" index="0"/>
       <server-instance template="ShellTemplate" id="Web" act="on-demand"/>
       <server-instance template="StormTemplate"/>
-    </node>
-
-    <node name="backup">
-      <server-instance template="BlitzTemplate" index="1" config="backup"/>
-    </node>
-
-    <node name="node1">
-      <server-instance template="ProcessorTemplate" index="1"/>
-    </node>
-
-    <node name="node2">
-      <server-instance template="ProcessorTemplate" index="2"/>
+      <server-instance template="ProcessorTemplate" index="0" dir=""/><!-- assumes legacy -->
+      <server-instance template="TablesTemplate" index="0" dir=""/><!-- assumes legacy -->
+      <server-instance template="TestDropBoxTemplate"/>
     </node>
 
   </application>

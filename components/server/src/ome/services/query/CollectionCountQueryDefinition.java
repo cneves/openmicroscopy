@@ -32,7 +32,7 @@ import ome.tools.lsid.LsidUtils;
  * information to outgoing results.
  * 
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 3463 $ $Date: 2009-02-05 15:25:11 +0000 (Thu, 05 Feb 2009) $) </small>
  * @since OMERO 3.0
  * @see Details#getCounts()
  */

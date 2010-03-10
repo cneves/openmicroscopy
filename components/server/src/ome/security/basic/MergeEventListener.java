@@ -16,6 +16,7 @@ import ome.conditions.SecurityViolation;
 import ome.model.IEnum;
 import ome.model.IObject;
 import ome.tools.hibernate.HibernateUtils;
+import ome.util.Utils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -40,11 +41,11 @@ import org.springframework.util.Assert;
  * version); and unloaded/filtered objects & collections are re-filled.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 5815 $, $Date: 2009-11-19 11:16:23 +0000 (Thu, 19 Nov 2009) $
  * @since 3.0
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2009-11-19 11:16:23 +0000 (Thu, 19 Nov 2009) $")
+@RevisionNumber("$Revision: 5815 $")
 public class MergeEventListener extends IdTransferringMergeEventListener {
 
     public final static String MERGE_EVENT = "MergeEvent";
@@ -144,7 +145,8 @@ public class MergeEventListener extends IdTransferringMergeEventListener {
             final EventSource source = event.getSession();
             log("Reloading unloaded entity:", event.getEntityName(), ":", orig
                     .getId());
-            Object obj = source.load(orig.getClass(), orig.getId());
+            Class<?> k = Utils.trueClass(orig.getClass());
+            Object obj = source.load(k, orig.getId());
             event.setResult(obj);
             copyCache.put(event.getEntity(), obj);
             fillReplacement(event);

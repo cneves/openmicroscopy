@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: JobBean.java 3303 2009-01-15 14:53:43Z jmoore $
  *
  *   Copyright 2007 Glencoe Software, Inc. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

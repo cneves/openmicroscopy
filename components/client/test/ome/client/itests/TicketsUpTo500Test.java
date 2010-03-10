@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: TicketsUpTo500Test.java 3166 2008-12-02 10:35:05Z andrew $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

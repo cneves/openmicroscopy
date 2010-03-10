@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: Version.java 3352 2009-01-26 14:00:59Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -19,15 +19,15 @@ import ome.conditions.InternalException;
  * static utililty for checking Omero classes for revision number and date.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date: 2006-12-15 09:44:52 +0100 (Fri, 15 Dec
+ * @version $Revision: 3352 $, $Date: 2006-12-15 09:44:52 +0100 (Fri, 15 Dec
  *          2006) $
  * @see RevisionDate
  * @see RevisionNumber
  * @see SimpleDateFormat
  * @since 3.0-M3
  */
-@RevisionDate("$Date: 1970-01-01 00:00:01 +0100 (Thu, 01 Jan 1970) $")
-@RevisionNumber("$Revision: 2500 $")
+@RevisionDate("$Date: 2009-01-26 14:00:59 +0000 (Mon, 26 Jan 2009) $")
+@RevisionNumber("$Revision: 3352 $")
 public abstract class Version {
 
     /**

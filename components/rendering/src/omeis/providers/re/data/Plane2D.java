@@ -45,7 +45,7 @@ import omeis.providers.re.Renderer;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 5709 $ $Date:
  *          2005/06/08 20:15:03 $) </small>
  * @since OME2.2
  */
@@ -92,7 +92,7 @@ public class Plane2D {
      * @param data
      *            The raw pixels.
      */
-    protected Plane2D(PlaneDef pDef, Pixels pixels, PixelData data) {
+    public Plane2D(PlaneDef pDef, Pixels pixels, PixelData data) {
         this.planeDef = pDef;
         this.sizeX = pixels.getSizeX();
         this.sizeY = pixels.getSizeY();

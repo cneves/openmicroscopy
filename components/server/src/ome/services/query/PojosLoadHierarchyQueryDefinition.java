@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: PojosLoadHierarchyQueryDefinition.java 5952 2009-12-14 09:36:05Z jburel $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -61,6 +61,7 @@ public class PojosLoadHierarchyQueryDefinition extends Query {
                     + "this.imageLinksCountPerOwner this_i_c ");
         } else if (Screen.class.isAssignableFrom(klass)) {
         	sb.append("select this from Screen this ");
+			sb.append("left outer join fetch this.screenAcquisition sa ");
             sb.append("left outer join fetch this.plateLinks pdl ");
             sb.append("left outer join fetch pdl.child ds ");
             sb.append("left outer join fetch "

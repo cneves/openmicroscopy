@@ -9,7 +9,6 @@
 """
 import Ice
 import omero_model_Details_ice
-import omero_model_PermissionsI
 _omero = Ice.openModule("omero")
 _omero_model = Ice.openModule("omero.model")
 __name__ = "omero.model"
@@ -27,7 +26,6 @@ class DetailsI(_omero_model.Details):
 
       def __init__(self):
           super(DetailsI, self).__init__()
-          self._permissions = _omero_model.PermissionsI()
 
       def getOwner(self):
           return self._owner

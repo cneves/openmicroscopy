@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: EjbTest.java 2060 2008-01-16 15:03:05Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

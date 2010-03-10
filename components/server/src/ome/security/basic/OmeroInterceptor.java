@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: OmeroInterceptor.java 5904 2009-11-27 09:29:29Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -60,13 +60,13 @@ import org.springframework.util.Assert;
  * Current responsibilities include the proper (re-)setting of {@link Details}
  *
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 5904 $, $Date: 2009-11-27 09:29:29 +0000 (Fri, 27 Nov 2009) $
  * @see EmptyInterceptor
  * @see Interceptor
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2009-11-27 09:29:29 +0000 (Fri, 27 Nov 2009) $")
+@RevisionNumber("$Revision: 5904 $")
 public class OmeroInterceptor implements Interceptor {
 
     static volatile String last = null;

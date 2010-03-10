@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: Preferences3Test.java 2756 2008-08-27 13:33:21Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -41,7 +41,7 @@ import org.testng.annotations.Test;
  * 
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 2756 $ $Date: 2008-08-27 14:33:21 +0100 (Wed, 27 Aug 2008) $) </small>
  * @since 1.0
  */
 public class Preferences3Test extends TestCase {

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: RenderingBean.java 5709 2009-11-13 14:39:15Z callan $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import ome.annotations.RevisionDate;
@@ -81,12 +82,12 @@ import org.springframework.transaction.annotation.Transactional;
  * @author Chris Allan, callan at blackcat.ca
  * @author Jean-Marie Burel, j.burel at dundee.ac.uk
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 5709 $, $Date: 2009-11-13 14:39:15 +0000 (Fri, 13 Nov 2009) $
  * @see RenderingEngine
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2009-11-13 14:39:15 +0000 (Fri, 13 Nov 2009) $")
+@RevisionNumber("$Revision: 5709 $")
 @Transactional(readOnly = true)
 public class RenderingBean implements RenderingEngine, Serializable {
 
@@ -374,6 +375,17 @@ public class RenderingBean implements RenderingEngine, Serializable {
         } finally {
             rwl.writeLock().unlock();
         }
+    }
+    
+    /**
+     * Implemented as specified by the {@link RenderingEngine} interface.
+     * 
+     * @see RenderingEngine#setOverlays()
+     */
+    @RolesAllowed("user")
+    public void setOverlays(Map<byte[], Integer> overlays)
+    {
+    	renderer.setOverlays(overlays);
     }
 
     /**
@@ -719,19 +731,9 @@ public class RenderingBean implements RenderingEngine, Serializable {
                     new Executor.SimpleWork(this,"saveCurrentSettings"){
                         @Transactional(readOnly = false)
                         public Object doWork(Session session, ServiceFactory sf) {
-                            try {
-                                IPixels pixMetaSrv = sf.getPixelsService();
-                                pixMetaSrv.saveRndSettings(rendDefObj);
-                                return pixMetaSrv.retrieveRndSettings(pixelsObj.getId());
-                            } finally {
-                                try {
-                                    session.flush();
-                                    session.clear();
-                                } catch (Exception e) {
-                                    log.error("Exception while flushing:",e);
-                                }
-                            }
-
+                            IPixels pixMetaSrv = sf.getPixelsService();
+                            pixMetaSrv.saveRndSettings(rendDefObj);
+                            return pixMetaSrv.retrieveRndSettings(pixelsObj.getId());
                         }});
             
             // Unload the linked pixels set to avoid transactional headaches on

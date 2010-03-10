@@ -32,12 +32,12 @@ import ome.annotations.RevisionNumber;
  * </code>
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1167 $, $Date: 2006-12-15 10:39:34 +0000 (Fri, 15 Dec 2006) $
  * @see SecuritySystem#runAsAdmin(AdminAction)
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2006-12-15 10:39:34 +0000 (Fri, 15 Dec 2006) $")
+@RevisionNumber("$Revision: 1167 $")
 public interface AdminAction {
     /**
      * executes with special privilegs within the {@link SecuritySystem}.

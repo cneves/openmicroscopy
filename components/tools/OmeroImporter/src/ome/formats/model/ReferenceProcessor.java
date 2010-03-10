@@ -23,8 +23,11 @@
 
 package ome.formats.model;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.logging.Log;
@@ -35,6 +38,7 @@ import omero.metadatastore.IObjectContainer;
 import omero.model.DetectorSettings;
 import omero.model.LightSettings;
 import omero.model.ObjectiveSettings;
+import omero.model.WellSample;
 
 /**
  * Processes the references of an IObjectContainerStore and ensures
@@ -56,60 +60,87 @@ public class ReferenceProcessor implements ModelProcessor
     public void process(IObjectContainerStore store)
     	throws ModelException
     {
-        Map<String, String> referenceStringCache = 
-            new HashMap<String, String>();
-    	Map<LSID, LSID> referenceCache = store.getReferenceCache();
+        Map<String, String[]> referenceStringCache = 
+        	new HashMap<String, String[]>();
+    	Map<LSID, List<LSID>> referenceCache = store.getReferenceCache();
     	Map<LSID, IObjectContainer> containerCache = store.getContainerCache();
     	try
         {
             for (LSID target : referenceCache.keySet())
             {
-                LSID reference = referenceCache.get(target);
-                IObjectContainer container = containerCache.get(target);
-                if (container == null)
-                {
-                	// Handle the cases where a "Settings" object has been
-                	// used to link an element of the Instrument to the Image
-                	// but there were no acquisition specific settings to
-                	// record. Hence, the "Settings" object needs to be created
-                	// as no MetadataStore methods pertaining to the "Settings"
-                	// object have been entered.
-                    Class targetClass = target.getJavaClass();
-                    LinkedHashMap<String, Integer> indexes = 
-                        new LinkedHashMap<String, Integer>();
-                    int[] indexArray = target.getIndexes();
-                    if (targetClass == null)
-                    {
-                        log.warn("Unknown target class for LSID: " + target);
-                        referenceStringCache.put(target.toString(),
-                                                 reference.toString());
-                        continue;
-                    }
-                    else if (targetClass.equals(DetectorSettings.class))
-                    {
-                        indexes.put("imageIndex", indexArray[0]);
-                        indexes.put("logicalChannelIndex", indexArray[1]);
-                    }
-                    else if (targetClass.equals(LightSettings.class))
-                    {
-                        indexes.put("imageIndex", indexArray[0]);
-                        indexes.put("logicalChannelIndex", indexArray[1]);
-                    }
-                    else if (targetClass.equals(ObjectiveSettings.class))
-                    {
-                        indexes.put("imageIndex", indexArray[0]);
-                    }
-                    else
-                    {
-                        throw new RuntimeException(String.format(
-                                "Unable to synchronize reference %s --> %s",
-                                reference, target));
-                    }
-                    container = store.getIObjectContainer(targetClass, indexes);
-                }
-                
-                // Add our LSIDs to the string based reference cache.
-                referenceStringCache.put(container.LSID, reference.toString());
+            	IObjectContainer container = containerCache.get(target);
+            	Class targetClass = target.getJavaClass();
+            	List<String> references = new ArrayList<String>();
+            	for (LSID reference : referenceCache.get(target))
+            	{
+            		if (container == null)
+            		{
+            			// Handle the cases where a "Settings" object has been
+            			// used to link an element of the Instrument to the
+            			// Image but there were no acquisition specific 
+            			// settings to record. Hence, the "Settings" object 
+            			// needs to be created as no MetadataStore methods
+            			// pertaining to the "Settings" object have been
+            			// entered.
+            			LinkedHashMap<String, Integer> indexes = 
+            				new LinkedHashMap<String, Integer>();
+            			int[] indexArray = target.getIndexes();
+            			if (targetClass == null)
+            			{
+            				log.warn("Unknown target class for LSID: " + target);
+            				references.add(reference.toString());
+            				continue;
+            			}
+            			else if (targetClass.equals(DetectorSettings.class))
+            			{
+            				indexes.put("imageIndex", indexArray[0]);
+            				indexes.put("logicalChannelIndex", indexArray[1]);
+            			}
+            			else if (targetClass.equals(LightSettings.class))
+            			{
+            				indexes.put("imageIndex", indexArray[0]);
+            				indexes.put("logicalChannelIndex", indexArray[1]);
+            			}
+            			else if (targetClass.equals(ObjectiveSettings.class))
+            			{
+            				indexes.put("imageIndex", indexArray[0]);
+            			}
+            			else if (targetClass.equals(WellSample.class))
+            			{
+            				// A WellSample has been used to link an Image to
+            				// a Well and there was no acquisition specific
+            				// metadata to record about the WellSample. We now
+            				// need to create it.
+            				indexes.put("plateIndex", indexArray[0]);
+            				indexes.put("wellIndex", indexArray[1]);
+            				indexes.put("wellSample", indexArray[2]);
+            			}
+            			else
+            			{
+            				throw new RuntimeException(String.format(
+            						"Unable to synchronize reference %s --> %s",
+            						reference, target));
+            			}
+            			container = 
+            				store.getIObjectContainer(targetClass, indexes);
+            		}
+
+            		// Add our LSIDs to the string based reference cache.
+            		references.add(reference.toString());
+            	}
+            	String lsid = targetClass == null? target.toString()
+            					: container.LSID;
+            	// We don't want to overwrite any existing references that may
+            	// have come from other LSID mappings (such as a generated
+            	// LSID) so add any existing LSIDs to the list of references.
+            	if (referenceStringCache.containsKey(lsid))
+            	{
+            		String[] existing = referenceStringCache.get(lsid);
+            		references.addAll(Arrays.asList(existing));
+            	}
+        		String[] referencesAsString = 
+        			references.toArray(new String[references.size()]);
+           		referenceStringCache.put(lsid, referencesAsString);
             }
             store.setReferenceStringCache(referenceStringCache);
         }

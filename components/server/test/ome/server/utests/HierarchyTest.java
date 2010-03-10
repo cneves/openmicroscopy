@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: HierarchyTest.java 3301 2009-01-15 14:53:40Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

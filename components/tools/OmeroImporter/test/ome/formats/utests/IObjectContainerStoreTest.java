@@ -6,11 +6,10 @@ import java.util.Map;
 
 import ome.util.LSID;
 import ome.formats.OMEROMetadataStoreClient;
-import ome.formats.importer.OMEROWrapper;
 import ome.formats.model.BlitzInstanceProvider;
-import omero.metadatastore.IObjectContainer;
 import omero.model.Image;
 import omero.model.ObjectiveSettings;
+import omero.model.Pixels;
 import omero.api.ServiceFactoryPrx;
 import junit.framework.TestCase;
 
@@ -36,8 +35,9 @@ public class IObjectContainerStoreTest extends TestCase
         store.setImageName("Foo1", IMAGE_INDEX);
         store.setImageName("Foo2", IMAGE_INDEX + 1);
         
-        // Object of a different type
+        // Objects of a different type
         store.setPixelsSizeX(1, IMAGE_INDEX, PIXELS_INDEX);
+        store.setPixelsSizeX(1, IMAGE_INDEX + 1, PIXELS_INDEX);
         
         // Add a reference
         store.setObjectiveSettingsObjective("Objective:0", IMAGE_INDEX);
@@ -52,7 +52,7 @@ public class IObjectContainerStoreTest extends TestCase
 	
 	public void testSetReferenceStringCache()
 	{
-		Map<String, String> a = new HashMap<String, String>();
+		Map<String, String[]> a = new HashMap<String, String[]>();
 		store.setReferenceStringCache(a);
 		assertEquals(a, store.getReferenceStringCache());
 	}
@@ -79,11 +79,38 @@ public class IObjectContainerStoreTest extends TestCase
 	public void testCachedContainers()
 	{
 		assertEquals(2, store.countCachedContainers(Image.class));
+		assertEquals(2, store.countCachedContainers(Pixels.class));
+		assertEquals(1, store.countCachedContainers(
+				Pixels.class, IMAGE_INDEX));
+		assertEquals(1, store.countCachedContainers(
+				Pixels.class, IMAGE_INDEX + 1));
 	}
 	
 	public void testHasReference()
 	{
-		assertTrue(store.hasReference(new LSID(ObjectiveSettings.class, IMAGE_INDEX),
-				                      new LSID("Objective:0")));
+		assertTrue(store.hasReference(new LSID(ObjectiveSettings.class,
+				                      IMAGE_INDEX), new LSID("Objective:0")));
+	}
+	
+	public void testCount10000CachedContainers()
+	{
+		for (int i = 0; i < 10000; i++)
+		{
+			store.setImageName(String.valueOf(i), i);
+		}
+		long t0 = System.currentTimeMillis();
+		store.countCachedContainers(Image.class, null);
+		assertTrue((System.currentTimeMillis() - t0) < 100);
+	}
+	
+	public void testGet10000ContainersByClass()
+	{
+		for (int i = 0; i < 10000; i++)
+		{
+			store.setImageName(String.valueOf(i), i);
+		}
+		long t0 = System.currentTimeMillis();
+		store.getIObjectContainers(Image.class);
+		assertTrue((System.currentTimeMillis() - t0) < 100);
 	}
 }

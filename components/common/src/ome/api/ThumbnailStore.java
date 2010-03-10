@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ThumbnailStore.java 4599 2009-07-10 12:42:01Z callan $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -26,7 +26,7 @@ import ome.annotations.Validate;
  * 
  * @author Chris Allan &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:callan@blackcat.ca">callan@blackcat.ca</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Rev: 4599 $ $Date: 2009-07-10 13:42:01 +0100 (Fri, 10 Jul 2009) $) </small>
  * @since 3.0
  */
 public interface ThumbnailStore extends StatefulServiceInterface {
@@ -281,6 +281,31 @@ public interface ThumbnailStore extends StatefulServiceInterface {
      * @see getThumbDirect()
      */
     public void createThumbnail(Integer sizeX, Integer sizeY);
+    
+    /**
+     * Creates thumbnails for a number of pixels sets using a given set of 
+     * rendering settings (RenderingDef) in the on-disk cache. Unlike the 
+     * other thumbnail creation methods, this method <b>may</b> be called 
+     * without first calling {@link #setPixelsId()}. This method <b>will not</b>
+     * reset or modify rendering settings in any way. If rendering settings for
+     * a pixels set are not present, thumbnail creation for that pixels set
+     * <b>will not</b> be performed.
+     * 
+     * @param size
+     *            the size of the longest side of the thumbnail requested.
+     *            <code>null</code> specifies the default size of 48.
+     * @param pixelsIds the Pixels sets to retrieve thumbnails for.
+     * @throws ApiUsageException
+     *             if:
+     *             <ul>
+     *             <li><i>size</i> > pixels.sizeX and pixels.sizeY</li>
+     *             <li><i>size</i> is negative</li>
+     *             </ul>
+     * @see createThumbnail()
+     * @see createThumbnails()
+     */
+    public void createThumbnailsByLongestSideSet(Integer size, 
+    		@NotNull @Validate(Long.class) Set<Long> pixelsIds);
 
     /**
      * Creates thumbnails for a pixels set using a given set of rendering

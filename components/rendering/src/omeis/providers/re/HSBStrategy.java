@@ -8,9 +8,12 @@
 package omeis.providers.re;
 
 // Java imports
+import java.awt.Color;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -24,12 +27,16 @@ import org.apache.commons.logging.LogFactory;
 // Application-internal dependencies
 import ome.conditions.ResourceError;
 import ome.io.nio.PixelBuffer;
+import ome.io.nio.PixelData;
 import ome.model.core.Pixels;
 import ome.model.display.ChannelBinding;
+import ome.model.display.QuantumDef;
+import ome.model.enums.PixelsType;
 import omeis.providers.re.codomain.CodomainChain;
 import omeis.providers.re.data.PlaneFactory;
 import omeis.providers.re.data.Plane2D;
 import omeis.providers.re.data.PlaneDef;
+import omeis.providers.re.quantum.BinaryMaskQuantizer;
 import omeis.providers.re.quantum.QuantizationException;
 import omeis.providers.re.quantum.QuantumStrategy;
 
@@ -54,7 +61,7 @@ import omeis.providers.re.quantum.QuantumStrategy;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 5709 $ $Date:
  *          2005/06/22 17:09:48 $) </small>
  * @since OME2.2
  */
@@ -62,12 +69,6 @@ class HSBStrategy extends RenderingStrategy {
 	
     /** The logger for this particular class */
     private static Log log = LogFactory.getLog(HSBStrategy.class);
-
-    /**
-     * The maximum number of tasks (regions to split the image up into) that we
-     * will be using.
-     */
-    private static final int maxTasks = 2;
 
     /**
      * Initializes the <code>sizeX1</code> and <code>sizeX2</code> fields
@@ -115,7 +116,7 @@ class HSBStrategy extends RenderingStrategy {
     }
 
     /**
-     * Retrieves the wavelength data for all the active channels.
+     * Retrieves the wavelength data for all the active channels and overlays.
      * 
      * @return the wavelength data.
      */
@@ -132,8 +133,21 @@ class HSBStrategy extends RenderingStrategy {
         	for (int w = 0; w < channelBindings.length; w++) {
         		if (channelBindings[w].getActive()) {
         			performanceStats.startIO(w);
-        			wData.add(PlaneFactory.createPlane(pDef, w, metadata, pixels));
+        			wData.add(PlaneFactory.createPlane(pDef, w, metadata, 
+        					pixels));
         			performanceStats.endIO(w);
+        		}
+        	}
+        	Map<byte[], Integer> overlays = renderer.getOverlays();
+        	if (overlays != null)
+        	{
+        		PixelsType bitType = new PixelsType();
+        		bitType.setValue("bit");
+        		for (byte[] overlay : overlays.keySet())
+        		{
+        			PixelData data =
+        				new PixelData(bitType, ByteBuffer.wrap(overlay));
+        			wData.add(new Plane2D(pDef, metadata, data));
         		}
         	}
         }
@@ -173,6 +187,17 @@ class HSBStrategy extends RenderingStrategy {
                 colors.add(theNewColor);
             }
         }
+    	Map<byte[], Integer> overlays = renderer.getOverlays();
+    	if (overlays != null)
+    	{
+    		for (byte[] overlay : overlays.keySet())
+    		{
+    			Integer packedColor = overlays.get(overlay);
+    			Color color = new Color(packedColor);
+    			colors.add(new int[] { color.getRed(), color.getBlue(),
+    					               color.getGreen(), color.getAlpha() });
+    		}
+    	}
         return colors;
     }
 
@@ -191,6 +216,17 @@ class HSBStrategy extends RenderingStrategy {
                 strats.add(qManager.getStrategyFor(w));
             }
         }
+    	Map<byte[], Integer> overlays = renderer.getOverlays();
+    	if (overlays != null)
+    	{
+    		QuantumDef def = new QuantumDef();  // Just to fulfill interface
+    		PixelsType bitType = new PixelsType();
+    		bitType.setValue("bit");
+    		for (int i = 0; i < overlays.size(); i++)
+    		{
+    			strats.add(new BinaryMaskQuantizer(def, bitType));
+    		}
+    	}
         return strats;
     }
 
@@ -205,11 +241,11 @@ class HSBStrategy extends RenderingStrategy {
      * @return An array containing the tasks.
      */
     private RenderingTask[] makeRenderingTasks(PlaneDef def, RGBBuffer buf) {
-        ArrayList<RenderHSBRegionTask> tasks = new ArrayList<RenderHSBRegionTask>();
+        List<RenderHSBRegionTask> tasks = new ArrayList<RenderHSBRegionTask>();
 
         // Get all objects we need to create the tasks.
         CodomainChain cc = renderer.getCodomainChain();
-        RenderingStats performanceStats = renderer.getStats();
+        //RenderingStats performanceStats = renderer.getStats();
         List<Plane2D> wData = getWavelengthData(def);
         List<int[]> colors = getColors();
         List<QuantumStrategy> strategies = getStrategies();
@@ -242,7 +278,7 @@ class HSBStrategy extends RenderingStrategy {
             QuantizationException {
         // Set the context and retrieve objects we're gonna use.
         renderer = ctx;
-        RenderingStats performanceStats = renderer.getStats();
+        //RenderingStats performanceStats = renderer.getStats();
         Pixels metadata = renderer.getMetadata();
 
         // Initialize sizeX1 and sizeX2 according to the plane definition and
@@ -275,7 +311,7 @@ class HSBStrategy extends RenderingStrategy {
         return buf;
     }
 
- /**
+    /**
      * Implemented as specified by the superclass.
      * 
      * @see RenderingStrategy#renderAsPackedIntRGBA(Renderer ctx, PlaneDef planeDef)

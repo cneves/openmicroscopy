@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: CurrentDetails.java 3721 2009-02-24 10:18:00Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

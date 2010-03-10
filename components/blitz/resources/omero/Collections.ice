@@ -37,17 +37,17 @@ module omero {
         ["java:type:java.util.HashMap<Long,Long>:java.util.Map<Long,Long>"]
             dictionary<long, long> CountMap;
 
-        /*
+        /**
          * ParamMap replaces the ome.parameters.QueryParam
          * type, since the use of varargs is not possible.
-         */
+         **/
         ["java:type:java.util.HashMap"]
             dictionary<string,omero::RType> ParamMap;
 
-        /*
+        /**
          * IdByteMap is used by the ThumbnailService for the multiple thumbnail
          * retrieval methods.
-         */
+         **/
         ["java:type:java.util.HashMap"]
             dictionary<long,Ice::ByteSeq> IdByteMap;
 
@@ -59,7 +59,23 @@ module omero {
 
         dictionary<string, omero::model::Annotation> SearchMetadata;
 
-        // Lists
+        //
+        // Primitive Lists
+        //
+
+        ["java:type:java.util.ArrayList<String>:java.util.List<String>"]
+            sequence<string> StringSet;
+
+        ["java:type:java.util.ArrayList<Long>:java.util.List<Long>"]
+            sequence<long> LongList;
+
+        ["java:type:java.util.ArrayList<Integer>:java.util.List<Integer>"]
+            sequence<int> IntegerList;
+
+        //
+        // Object lists
+        //
+
 
         ["java:type:java.util.ArrayList"]
             sequence<SearchMetadata> SearchMetadataList;
@@ -82,9 +98,6 @@ module omero {
         ["java:type:java.util.ArrayList<omero.model.Session>:java.util.List<omero.model.Session>"]
             sequence<omero::model::Session> SessionList;
 
-        ["java:type:java.util.ArrayList<String>:java.util.List<String>"]
-            sequence<string> StringSet;
-
         ["java:type:java.util.ArrayList<omero.model.IObject>:java.util.List<omero.model.IObject>"]
             sequence<omero::model::IObject> IObjectList;
 
@@ -97,55 +110,68 @@ module omero {
         ["java:type:java.util.ArrayList<omero.model.Image>:java.util.List<omero.model.Image>"]
             sequence<omero::model::Image> ImageList;
 
- 		["java:type:java.util.ArrayList<omero.model.LogicalChannel>:java.util.List<omero.model.LogicalChannel>"]
+        ["java:type:java.util.ArrayList<omero.model.LogicalChannel>:java.util.List<omero.model.LogicalChannel>"]
             sequence<omero::model::LogicalChannel> LogicalChannelList;
-            
+
+        ["java:type:java.util.ArrayList<omero.model.OriginalFile>:java.util.List<omero.model.OriginalFile>"]
+            sequence<omero::model::OriginalFile> OriginalFileList;
+
         ["java:type:java.util.ArrayList<omero.model.Pixels>:java.util.List<omero.model.Pixels>"]
             sequence<omero::model::Pixels> PixelsList;
 
         ["java:type:java.util.ArrayList<omero.model.PixelsType>:java.util.List<omero.model.PixelsType>"]
             sequence<omero::model::PixelsType> PixelsTypeList;
 
-        ["java:type:java.util.ArrayList<Long>:java.util.List<Long>"]
-            sequence<long> LongList;
+        ["java:type:java.util.ArrayList<omero.model.Roi>:java.util.List<omero.model.Roi>"]
+            sequence<omero::model::Roi> RoiList;
 
-        ["java:type:java.util.ArrayList<Integer>:java.util.List<Integer>"]
-            sequence<int> IntegerList;
-
+        ["java:type:java.util.ArrayList<omero.model.Shape>:java.util.List<omero.model.Shape>"]
+            sequence<omero::model::Shape> ShapeList;
 
         // Arrays
 
+        sequence<bool> BoolArray;
         sequence<byte> ByteArray;
         sequence<short> ShortArray;
         sequence<int> IntegerArray;
-		sequence<long> LongArray;
-		sequence<double> DoubleArray;
-		sequence<ByteArray> ByteArrayArray;
-		sequence<ShortArray> ShortArrayArray;
-		sequence<IntegerArray> IntegerArrayArray;
+        sequence<long> LongArray;
+        sequence<double> DoubleArray;
+        sequence<string> StringArray;
+        sequence<ByteArray> ByteArrayArray;
+        sequence<ShortArray> ShortArrayArray;
+        sequence<IntegerArray> IntegerArrayArray;
         sequence<IntegerArrayArray> IntegerArrayArrayArray;
         sequence<LongArray> LongArrayArray;
-		sequence<DoubleArray> DoubleArrayArray;
+        sequence<DoubleArray> DoubleArrayArray;
         sequence<DoubleArrayArray> DoubleArrayArrayArray;
+        sequence<StringArray> StringArrayArray;
 
         // Dictionaries
 
-        dictionary<bool, omero::sys::LongList> BooleanIdListMap;
-        dictionary<long, string> LongStringMap;
-        dictionary<long, ByteArray> LongByteArrayMap;
-        dictionary<long, omero::model::Pixels> LongPixelsMap;
-        dictionary<string, omero::RType> StringRTypeMap;
+        dictionary<long,   string>                     LongStringMap;
+        dictionary<long,   int>                        LongIntMap;
+        dictionary<long,   ByteArray>                  LongByteArrayMap;
+        dictionary<long,   omero::model::Pixels>       LongPixelsMap;
+        dictionary<string, omero::RType>               StringRTypeMap;
         dictionary<string, omero::model::Experimenter> UserMap;
-        dictionary<string, IObjectList> IObjectListMap;
-        dictionary<string, string> StringStringMap;
-        dictionary<string, long> StringLongMap;
-        dictionary<string, int> StringIntMap;
-        dictionary<string, Ice::LongSeq> IdListMap;
+        dictionary<string, string>                     StringStringMap;
+        dictionary<string, StringArray>                StringStringArrayMap;
+        dictionary<string, long>                       StringLongMap;
+        dictionary<string, int>                        StringIntMap;
+
+        // Multimaps (dictionaries with sequence values)
+
+        dictionary<string, Ice::LongSeq>               IdListMap;
+        dictionary<bool,   omero::sys::LongList>       BooleanIdListMap;
+        dictionary<string, IObjectList>                IObjectListMap;
+        dictionary<string, ShapeList>                  StringShapeListMap;
+        dictionary<long,   ShapeList>                  LongShapeListMap;
+        dictionary<int,    ShapeList>                  IntShapeListMap;
 
         // Redundant or too specifically named definitions. Should possibly be deprecated.
 
-        dictionary<long, string> ScriptIDNameMap;
-        dictionary<long, IObjectList> AnnotationMap;
+        dictionary<long, string>                       ScriptIDNameMap;
+        dictionary<long, IObjectList>                  AnnotationMap;
 
     };
 

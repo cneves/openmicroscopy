@@ -1,15 +1,16 @@
 package ome.formats.utests;
 
-import ome.util.LSID;
+import junit.framework.TestCase;
 import ome.formats.OMEROMetadataStoreClient;
+import ome.formats.importer.ImportConfig;
 import ome.formats.importer.OMEROWrapper;
 import ome.formats.model.BlitzInstanceProvider;
+import ome.util.LSID;
+import omero.api.ServiceFactoryPrx;
+import omero.model.Image;
 import omero.model.Instrument;
 import omero.model.LightSource;
-import omero.model.Image;
 import omero.model.Pixels;
-import omero.api.ServiceFactoryPrx;
-import junit.framework.TestCase;
 
 public class InstrumentTest extends TestCase
 {
@@ -31,7 +32,7 @@ public class InstrumentTest extends TestCase
 	protected void setUp() throws Exception
 	{
 		ServiceFactoryPrx sf = new TestServiceFactory();
-        wrapper = new OMEROWrapper();
+        wrapper = new OMEROWrapper(new ImportConfig());
         store = new OMEROMetadataStoreClient();
         store.initialize(sf);
         store.setEnumerationProvider(new TestEnumerationProvider());
@@ -65,7 +66,7 @@ public class InstrumentTest extends TestCase
 	    LSID lsid = new LSID(LightSource.class, 
 	                           INSTRUMENT_INDEX, LIGHTSOURCE_INDEX);
 	    assertNotNull(store.getSourceObject(lsid));
-	    assertNotNull(store.getSourceObject(new LSID("Instrument:0")));
+	    assertNotNull(store.getSourceObject(new LSID(Instrument.class, 0)));
 	}
 	
 	public void testImageInstrumentLightSourceModelPreserved()

@@ -25,12 +25,12 @@ import org.springframework.util.Assert;
  * clean up of entities.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2638 $, $Date: 2008-07-30 21:58:38 +0100 (Wed, 30 Jul 2008) $
  * @since 3.0
  * @see BasicSecuritySystem#lockMarked()
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-07-30 21:58:38 +0100 (Wed, 30 Jul 2008) $")
+@RevisionNumber("$Revision: 2638 $")
 public class FlushEntityEventListener extends DefaultFlushEntityEventListener {
 
     private static final long serialVersionUID = 240558701677298961L;

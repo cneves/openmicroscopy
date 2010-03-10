@@ -5,40 +5,63 @@
 {% load wikitags %}
 
 {% block link %}
-    <link rel="stylesheet" href="{% get_webclient_static_url %}/css/annotation.css" type="text/css" media="screen"/>
-    <link rel="stylesheet" href="{% get_webclient_static_url %}/css/googiespell.css" type="text/css" media="screen"/>
+    <link rel="stylesheet" href="{% url webstatic "css/annotation.css" %}" type="text/css" media="screen"/>
+    <link rel="stylesheet" href="{% url webstatic "css/googiespell.css" %}" type="text/css" media="screen"/>
+    <link rel="stylesheet" href="{% url webstatic "css/zoom.css" %}" type="text/css" media="screen"/>
+    <link rel="stylesheet" href="/webgateway/appmedia/css/jquery-plugin-slider.css" type="text/css" media="screen"/>
+    <link rel="stylesheet" href="/webgateway/appmedia/css/weblitz-viewport.css" type="text/css" media="screen"/>
 {% endblock %}
 
 {% block jscript %}
-    <script type="text/javascript" src="{% get_webclient_static_url %}/javascript/jquery_1.2.6.js"></script>
+    <script type="text/javascript" src="{% url webstatic "javascript/jquery_1.2.6.js" %}"></script>
     
-    <script type="text/javascript" src="{% get_webclient_static_url %}/javascript/googiespell/AJS.js"></script>
-    <script type="text/javascript" src="{% get_webclient_static_url %}/javascript/googiespell/googiespell.js"></script>
-    <script type="text/javascript" src="{% get_webclient_static_url %}/javascript/googiespell/cookiesupport.js"></script>
+    <script type="text/javascript" src="{% url webstatic "javascript/googiespell/AJS.js" %}"></script>
+    <script type="text/javascript" src="{% url webstatic "javascript/googiespell/googiespell.js" %}"></script>
+    <script type="text/javascript" src="{% url webstatic "javascript/googiespell/cookiesupport.js" %}"></script>
 {% endblock %}
 
 {% block script %} 
-    <script type="text/javascript" src="{% get_webclient_static_url %}/javascript/blitzcon.js"></script>
+    <script type="text/javascript" src="/webgateway/appmedia/js/weblitz-viewport.js"></script>
+    <script type="text/javascript" src="/webgateway/appmedia/js/jquery-plugin-viewportImage.js"></script>
+    <script type="text/javascript" src="/webgateway/appmedia/js/jquery-plugin-slider.js"></script>
+    <script type="text/javascript" src="/webgateway/appmedia/js/gs_utils.js"></script>
+    
     <script>
         $(document).ready(function(){
             $("a.loadAnnotation").click(function()
             {
-                $("div#annotation").html('<p>{% trans "Loading annotations... please wait" %} <img src="{% get_webclient_static_url %}/images/tree/spinner.gif"/></p>');
-                $("div#annotation").load("{% get_webclient_root_url %}/annotations/image/{{ image.image.id }}/?t=zoom&url={{ url }}", function() {  
+                $("div#annotation").html('<p>{% trans "Loading annotations... please wait" %} <img src ="{% url webstatic "images/tree/spinner.gif" %}"/></p>');
+                $("div#annotation").load("{% url manage_annotations "image" image.image.id %}?t=zoom&url={{ url }}", function() {  
                         $("a.loadAnnotation").remove();                        
                     });
                 return false; 
             });
+            
+            var viewport = $.WeblitzViewport($("#zoom_viewport"), "/webgateway" );
+            viewport.load({{ image.image.id }});
         });
     </script>
+    <script>
+    var popup = function (url) {
+          window.open(url,'_blank','toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=1000,height=800');
+          return false;
+    }
+    </script>
+    
 {% endblock %}
 
 {% block center %}
 
-<div><center>
-    <a href="#" onclick="popup(null,'_blank','{{ image.image.id }}'); return false;"><img class="imgzoom" src="{% get_webclient_root_url %}/render_thumbnail/big/{{ image.image.id }}/" alt="image" title="{{ image.image.name }}"/></a></center>
+<div class="clear"></div>
+
+<div class="miniview_wrapper">
+    <p><a href="#" onclick="return popup('{% url image_viewer image.image.id %}')">Open full viewer</a></center></p>
+    <div class="miniview" id="zoom_viewport"></div>
+</div>
+<div class="clear"></div>
+<div>
     <div><h1>{% trans "Description" %}: </h1>
-        {{ image.image.description|default_if_none:"no description"|wikify|safe|linebreaks }}
+        {{ image.image.description|default_if_none:"no description"|linebreaks }}
     </div>
 </div>
 

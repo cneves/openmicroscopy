@@ -40,6 +40,8 @@ import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationListener;
 
 import Glacier2.CannotCreateSessionException;
+import Glacier2.IdentitySetPrx;
+import Glacier2.StringSetPrx;
 
 /**
  * Central login logic for all OMERO.blitz clients. It is required to create a
@@ -76,6 +78,10 @@ public final class SessionManagerI extends Glacier2._SessionManagerDisp
 
     protected final Ring ring;
 
+    protected final Registry registry;
+    
+    protected final TopicManager topicManager;
+    
     protected final AtomicBoolean loaded = new AtomicBoolean(false);
 
     /**
@@ -87,11 +93,13 @@ public final class SessionManagerI extends Glacier2._SessionManagerDisp
 
     public SessionManagerI(Ring ring, Ice.ObjectAdapter adapter,
             SecuritySystem secSys, SessionManager sessionManager,
-            Executor executor) {
+            Executor executor, TopicManager topicManager, Registry reg) {
         this.ring = ring;
+        this.registry = reg;
         this.adapter = adapter;
         this.executor = executor;
         this.securitySystem = secSys;
+        this.topicManager = topicManager;
         this.sessionManager = sessionManager;
     }
 
@@ -114,8 +122,12 @@ public final class SessionManagerI extends Glacier2._SessionManagerDisp
             wrapped.type = "ApiUsageException";
             throw wrapped;
         }
-
+        
         try {
+            
+            // First thing we do is guarantee that the client is giving us
+            // the required information.
+            ServiceFactoryI.clientId(current); // throws ApiUsageException
 
             // Before asking the ring, see if we already have the
             // session locally.
@@ -158,10 +170,20 @@ public final class SessionManagerI extends Glacier2._SessionManagerDisp
             // Event raised to add to Ring
 
             // Create the ServiceFactory
-            ServiceFactoryI session = new ServiceFactoryI(current, context,
-                    sessionManager, executor, sp, CPTORS);
+            ServiceFactoryI session = new ServiceFactoryI(current, control,
+                    context, sessionManager, executor, sp, CPTORS, topicManager,
+                    registry);
 
             Ice.Identity id = session.sessionId();
+
+            if (control != null) {
+                // Not having a control implies that this is an internal
+                // call, not coming through Glacier, so we can trust it.
+                StringSetPrx cat = control.categories();
+                cat.add(new String[]{id.category});
+                cat.add(new String[]{id.name});
+            }
+            
             Ice.ObjectPrx _prx = current.adapter.add(session, id);
             _prx = current.adapter.createDirectProxy(id);
 
@@ -254,7 +276,9 @@ public final class SessionManagerI extends Glacier2._SessionManagerDisp
                         "Could not unregister servant: could not create session id");
             }
             Ice.Object obj = curr.adapter.find(id);
-            if (obj instanceof ServiceFactoryI) {
+            if (obj == null) {
+                log.info("ServiceFactory null: "+id.name);
+            } else if (obj instanceof ServiceFactoryI) {
                 ServiceFactoryI sf = (ServiceFactoryI) obj;
                 sf.unregisterServant(Ice.Util.stringToIdentity(key));
             } else {
@@ -299,7 +323,9 @@ public final class SessionManagerI extends Glacier2._SessionManagerDisp
                     } else {
                         ServiceFactoryI sf = (ServiceFactoryI) obj;
                         sf.doDestroy();
-                        adapter.remove(sf.sessionId());
+                        Ice.Identity id = sf.sessionId();
+                        log.info("Removing " + id.name);
+                        adapter.remove(id);
                     }
                 } catch (Ice.ObjectAdapterDeactivatedException oade) {
                     log.warn("Cannot reap session " + sessionId

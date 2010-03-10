@@ -7,12 +7,15 @@
 package ome.services.blitz.util;
 
 import java.net.URL;
+import java.util.Map;
 
 import ome.security.SecuritySystem;
 import ome.services.blitz.fire.PermissionsVerifierI;
 import ome.services.blitz.fire.Registry;
 import ome.services.blitz.fire.Ring;
 import ome.services.blitz.fire.SessionManagerI;
+import ome.services.blitz.fire.TopicManager;
+import ome.services.roi.RoiTypes;
 import ome.services.util.Executor;
 import omero.model.DetailsI;
 import omero.model.PermissionsI;
@@ -51,8 +54,10 @@ public class BlitzConfiguration implements ApplicationListener {
     private final SessionManagerI blitzManager;
 
     private final PermissionsVerifier blitzVerifier;
-    
+
     private final Registry registry;
+    
+    private final TopicManager topicManager;
 
     private final Ice.InitializationData id;
 
@@ -92,7 +97,36 @@ public class BlitzConfiguration implements ApplicationListener {
             ome.services.sessions.SessionManager sessionManager,
             SecuritySystem securitySystem, Executor executor)
             throws RuntimeException {
+        this(id, ring, sessionManager, securitySystem, executor, null);
+    }
 
+    /**
+     * Like
+     * {@link #BlitzConfiguration(ome.services.sessions.SessionManager, SecuritySystem, Executor)}
+     * but allows {@link Ice.ObjectFactory} instances to be specified via a
+     * {@link Map}.
+     * 
+     * @param id
+     * @param sessionManager
+     * @param securitySystem
+     * @param executor
+     * @throws RuntimeException
+     */
+    public BlitzConfiguration(Ring ring,
+            ome.services.sessions.SessionManager sessionManager,
+            SecuritySystem securitySystem, Executor executor,
+            Map<String, Ice.ObjectFactory> factories) throws RuntimeException {
+        this(createId(), ring, sessionManager, securitySystem, executor, factories);
+    }
+    
+    /**
+     * Full constructor
+     */
+    public BlitzConfiguration(Ice.InitializationData id, Ring ring,
+            ome.services.sessions.SessionManager sessionManager,
+            SecuritySystem securitySystem, Executor executor,
+            Map<String, Ice.ObjectFactory> factories) throws RuntimeException {
+        
         logger.info("Initializing Ice.Communicator");
 
         this.id = id;
@@ -104,19 +138,19 @@ public class BlitzConfiguration implements ApplicationListener {
         }
 
         try {
-            
+
             // This component is inert, and so can be created early.
             registry = new Registry.Impl(this.communicator);
-            
-            registerObjectFactory();
-                        blitzAdapter = createAdapter();
+            topicManager = new TopicManager.Impl(this.communicator);
+
+            registerObjectFactory(factories);
+            blitzAdapter = createAdapter();
             blitzManager = createAndRegisterManager(sessionManager,
                     securitySystem, executor);
             blitzVerifier = createAndRegisterVerifier(sessionManager);
             managerDirectProxy = blitzAdapter.createDirectProxy(managerId());
 
             blitzAdapter.activate();
-
 
             // When using adapter methods from within the ring, it is necessary
             // to start the adapter first.
@@ -229,18 +263,41 @@ public class BlitzConfiguration implements ApplicationListener {
      * omero.model.* classes as well as all the classes which the server would
      * like to receive from clients.
      */
-    protected void registerObjectFactory() {
-        ObjectFactoryRegistrar.registerObjectFactory(communicator,
-                ObjectFactoryRegistrar.INSTANCE);
+    protected void registerObjectFactory(
+            Map<String, Ice.ObjectFactory> factories) {
+        //
+        // First register the manually configured factories
+        //
+        if (factories != null) {
+            for (String key : factories.keySet()) {
+                communicator.addObjectFactory(factories.get(key), key);
+            }
+        }
+        //
+        // Then the rtypes support
+        //
         for (omero.rtypes.ObjectFactory of : omero.rtypes.ObjectFactories
                 .values()) {
             of.register(communicator);
         }
+        //
+        // And RoiTypes support
+        //
+        for (RoiTypes.ObjectFactory of : RoiTypes.ObjectFactories.values()) {
+            of.register(communicator);
+        }
+        //
+        // Then the code generated factories
+        //
+        ObjectFactoryRegistrar.registerObjectFactory(communicator,
+                ObjectFactoryRegistrar.INSTANCE);
+        //
+        // And finally our manually maintained model classes
+        //
         communicator
                 .addObjectFactory(DetailsI.Factory, DetailsI.ice_staticId());
         communicator.addObjectFactory(PermissionsI.Factory, PermissionsI
                 .ice_staticId());
-
     }
 
     /**
@@ -269,7 +326,7 @@ public class BlitzConfiguration implements ApplicationListener {
         throwIfInitialized(blitzManager);
 
         SessionManagerI manager = new SessionManagerI(blitzRing, blitzAdapter,
-                securitySystem, sessionManager, executor);
+                securitySystem, sessionManager, executor, topicManager, registry);
         Ice.Identity id = managerId();
         Ice.ObjectPrx prx = this.blitzAdapter.add(manager, id);
         return manager;
@@ -320,7 +377,7 @@ public class BlitzConfiguration implements ApplicationListener {
         }
         return communicator;
     }
-    
+
     public Ice.ObjectAdapter getBlitzAdapter() {
         if (blitzAdapter == null) {
             throw new IllegalStateException("Adapter is null");
@@ -348,6 +405,14 @@ public class BlitzConfiguration implements ApplicationListener {
         }
         return registry;
     }
+    
+    public TopicManager getTopicManager() {
+        if (topicManager == null) {
+            throw new IllegalStateException("TopicManager is null");
+        }
+        return topicManager;
+    }
+
     /**
      * Return a direct proxy to the session manager in this object adapter.
      */
@@ -372,9 +437,9 @@ public class BlitzConfiguration implements ApplicationListener {
     }
 
     // Listener
-    // Because the objects created here with "new" are not registered as 
+    // Because the objects created here with "new" are not registered as
     // listeners, we will delegate
-    
+
     public void onApplicationEvent(ApplicationEvent event) {
         blitzManager.onApplicationEvent(event);
     }

@@ -15,7 +15,7 @@ import ome.model.IObject;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Revision$ $Date$)
+ * @version 1.0 <small> (<b>Internal version:</b> $Revision: 4964 $ $Date: 2009-09-14 19:01:34 +0100 (Mon, 14 Sep 2009) $)
  *          </small>
  * @since OMERO3.0
  */
@@ -23,7 +23,4 @@ public interface LocalUpdate extends ome.api.IUpdate {
 
     void flush();
 
-    /** @see ome.api.IUpdate */
-    long[] saveAndReturnIds(IObject[] objects);
-    
 }

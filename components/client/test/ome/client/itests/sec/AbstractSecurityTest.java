@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: AbstractSecurityTest.java 5070 2009-09-24 10:37:03Z brain $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -22,7 +22,7 @@ import org.testng.annotations.Test;
 @Test(groups = { "client", "integration", "security" })
 public class AbstractSecurityTest extends TestCase {
 
-    protected ServiceFactory tmp = new ServiceFactory("ome.client.test");
+    protected ServiceFactory tmp = new ServiceFactory("ome.blitz.test");
 
     protected DataSource dataSource = (DataSource) tmp.getContext().getBean(
             "dataSource");

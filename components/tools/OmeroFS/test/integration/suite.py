@@ -13,7 +13,11 @@
 
 """
 
+import logging
+logging.basicConfig(level=logging.ERROR)
+
 import unittest
+import xmlrunner
 
 class TopLevel(unittest.TestCase):
     pass
@@ -21,5 +25,10 @@ class TopLevel(unittest.TestCase):
 def additional_tests():
     load = unittest.defaultTestLoader.loadTestsFromName
     suite = unittest.TestSuite()
+    suite.addTest(load("test.suite.additional_tests"))
     suite.addTest(load("test.integration.example"))
+    suite.addTest(load("test.integration.dbclient"))
     return suite
+
+if __name__ == "__main__":
+    xmlrunner.XMLTestRunner(output='target/test-reports').run(additional_tests())

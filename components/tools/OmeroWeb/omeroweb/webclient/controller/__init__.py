@@ -23,7 +23,6 @@
 #
 
 import operator
-from omeroweb.webclient.models import Advice
 
 def sortByAttr(seq, attr, reverse=False):
     # Use the "Schwartzian transform".
@@ -71,14 +70,14 @@ class BaseController(object):
     def __init__(self, conn, **kw):
         self.conn = conn
         self.eContext['context'] = self.conn.getEventContext()
-        self.eContext['user'] = self.conn.getUserWrapped()
+        self.eContext['user'] = self.conn.getUser()
         
         grs = list(self.conn.getGroupsMemberOf())
         self.eContext['memberOfGroups'] = self.sortByAttr(grs, "name")
         
         #grs.extend(list(self.conn.getGroupsLeaderOf()))
         self.eContext['allGroups'] = self.sortByAttr(grs, "name")
-        self.eContext['advice'] = Advice.objects.get(pk=1)
+        self.eContext['advice'] = None
     
     def sortByAttr(self, seq, attr, reverse=False):
         return sortByAttr(seq, attr, reverse)
@@ -86,7 +85,7 @@ class BaseController(object):
     #####################################################################
     # Permissions
     
-    def objectPermissions(self, obj, permissions):
+    def setObjectPermissions(self, obj, permissions):
         if permissions['owner'] == 'rw':
             obj.details.permissions.setUserRead(True)
             obj.details.permissions.setUserWrite(True)

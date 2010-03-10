@@ -21,13 +21,13 @@ import ome.model.meta.ExperimenterGroup;
  * These values are also used during install to initialize the database.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2146 $, $Date: 2008-02-07 11:21:50 +0000 (Thu, 07 Feb 2008) $
  * @see ome.model.meta.Experimenter
  * @see ome.model.meta.ExperimenterGroup
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-02-07 11:21:50 +0000 (Thu, 07 Feb 2008) $")
+@RevisionNumber("$Revision: 2146 $")
 public final class Roles implements Serializable {
 
     private static final long serialVersionUID = -7130017567693194759L;

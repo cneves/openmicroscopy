@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: StatefulServiceInterface.java 3303 2009-01-15 14:53:43Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -19,7 +19,7 @@ import ome.system.EventContext;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Revision$ $Date$)
+ * @version 1.0 <small> (<b>Internal version:</b> $Revision: 3303 $ $Date: 2009-01-15 14:53:43 +0000 (Thu, 15 Jan 2009) $)
  *          </small>
  * @since OME3.0
  */

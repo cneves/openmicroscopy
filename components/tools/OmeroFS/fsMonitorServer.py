@@ -1,13 +1,11 @@
 """
-    OMERO.fs Monitor module.
+    OMERO.fs MonitorServer module.
 
+    Copyright 2009 University of Dundee. All rights reserved.
+    Use is subject to license terms supplied in LICENSE.txt
 
 """
 import logging
-import fsLogger
-log = logging.getLogger("fs."+__name__)
-
-
 import sys, traceback
 import uuid
 import socket
@@ -22,14 +20,10 @@ except:
 # Imported as pathModule to avoid potential clashes.
 import path as pathModule
 
-# Now try to import the correct MonitorServer package
-import fsUtil
-try:
-    Monitor = __import__(fsUtil.monitorPackage())            
-except:
-    raise
+from fsMonitor import MonitorFactory
 
-import monitors
+import omero
+from omero.grid import monitors
 
 class MonitorServerI(monitors.MonitorServer):
     """
@@ -47,6 +41,7 @@ class MonitorServerI(monitors.MonitorServer):
             Intialise the instance variables.
         
         """
+        self.log = logging.getLogger("fsserver."+__name__)
         #self.fsPrefix = 'omero-fs://' + socket.gethostbyname(socket.gethostname())
         #self.prefixLne = len(self.fsPrefix) ## Save calculating it each time?
         #: Numerical component of a Monitor Id
@@ -64,14 +59,20 @@ class MonitorServerI(monitors.MonitorServer):
         Methods published in the slice interface omerofs.ice
     
     """
-    def createMonitor(self, eType, pathString, whitelist, blacklist, pMode, proxy, current=None):
+    def createMonitor(self, mType, eTypes, pMode, pathString, whitelist, blacklist, timeout, blockSize, ignoreSysFiles, ignoreDirEvents, proxy, current=None):
         """
             Create a the Monitor for a given path.
         
             :Parameters:
-                eType : 
-                    The event type to be monitored.
+                mType : 
+                    The type of monitor.
                     
+                eTypes : 
+                    A list of the event types to be monitored.          
+                    
+                pMode : 
+                    The mode of directory monitoring: flat, recursive or following.
+
                 pathString : string
                     A string representing a path to be monitored.
                   
@@ -81,9 +82,18 @@ class MonitorServerI(monitors.MonitorServer):
                 blacklist : list<string>
                     A list of subdirectories to be excluded.
 
-                pMode : 
-                    The mode of directory monitoring: flat, recursive or following.
-
+                timeout : float
+                    A timeout used by some types of monitor.
+                    
+                blockSize : intt
+                    Number of events to pack into one notification.
+                    
+                ignoreSysFiles : boolean
+                    Flag. If true platform-dependent system files are ignored
+                    
+                ignoreDirEvents : boolean
+                    Flag. If true directory events are ignored
+                    
                 proxy :
                     A proxy to be informed of events
                     
@@ -96,20 +106,21 @@ class MonitorServerI(monitors.MonitorServer):
             
         """
      
-        if pathString == None:
-            pathString = pathModule.path.getcwd()
-
         monitorId = self._getNextMonitorId()
 
         try:
-            self.monitors[monitorId] = Monitor.Monitor(eType, pathString, pMode, whitelist, blacklist, self, monitorId)
+            # blockSize (0) and ignoreDirEvents (True) hardwired until slice is changed.
+            self.monitors[monitorId] = MonitorFactory.createMonitor(mType, eTypes, pMode, pathString, 
+                                            whitelist, blacklist, timeout, blockSize, 
+                                            ignoreSysFiles, ignoreDirEvents, self, monitorId)
+
         except Exception, e:
-            log.error('Failed to create monitor: ' + str(e))
-            raise monitors.OmeroFSError('Failed to create monitor: ' + str(e))       
+            self.log.exception('Failed to create monitor: ')
+            raise omero.OmeroFSError(reason='Failed to create monitor: ' + str(e))       
 
         self.proxies[monitorId] = proxy    
 
-        log.info('Monitor id = ' + monitorId + ' created. Proxy: ' + str(proxy))
+        self.log.info('Monitor id = ' + monitorId + ' created. Proxy: ' + str(proxy))
 
         return monitorId
     
@@ -132,10 +143,10 @@ class MonitorServerI(monitors.MonitorServer):
         """
         try:
             self.monitors[id].start()
-            log.info('Monitor id = ' + id + ' started')
+            self.log.info('Monitor id = ' + id + ' started')
         except Exception, e:
-            log.error('Monitor id = ' + id + ' failed to start: ' + str(e))
-            raise monitors.OmeroFSError('Monitor id = ' + id + ' failed to start: ' + str(e))       
+            self.log.error('Monitor id = ' + id + ' failed to start: ' + str(e))
+            raise omero.OmeroFSError(reason='Monitor id = ' + id + ' failed to start: ' + str(e))       
         
 
     def stopMonitor(self, id, current=None):
@@ -156,10 +167,10 @@ class MonitorServerI(monitors.MonitorServer):
         """
         try:
             self.monitors[id].stop()
-            log.info('Monitor id = ' + id + ' stopped')
+            self.log.info('Monitor id = ' + id + ' stopped')
         except Exception, e:
-            log.error('Monitor id = ' + id + ' failed to stop: ' + str(e))
-            raise monitors.OmeroFSError('Monitor id = ' + id + ' failed to stop: ' + str(e))       
+            self.log.error('Monitor id = ' + id + ' failed to stop: ' + str(e))
+            raise omero.OmeroFSError(reason='Monitor id = ' + id + ' failed to stop: ' + str(e))       
 
 
     def destroyMonitor(self, id, current=None):
@@ -181,10 +192,10 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             del self.monitors[id]
             del self.proxies[id]
-            log.info('Monitor id = ' + id + ' destroyed')
+            self.log.info('Monitor id = ' + id + ' destroyed')
         except Exception, e:
-            log.error('Monitor id = ' + id + ' not destroyed: ' + str(e))
-            raise monitors.OmeroFSError('Monitor id = ' + id + ' not destroyed: ' + str(e))       
+            self.log.error('Monitor id = ' + id + ' not destroyed: ' + str(e))
+            raise omero.OmeroFSError(reason='Monitor id = ' + id + ' not destroyed: ' + str(e))       
 
     def getMonitorState(self, id):
         """
@@ -194,13 +205,13 @@ class MonitorServerI(monitors.MonitorServer):
             Raise an exception if the monitor does no exist.
         
         """
-        log.info('Monitor id = ' + id + ' state requested')
+        self.log.info('Monitor id = ' + id + ' state requested')
         # *****  TO BE IMPLEMENTED  *****
         # If monitor exists return state
         # otherwise raise an exception (no subscription).
         # (and ICE exception implies no server)
         
-        raise monitors.OmeroFSError('Method not yet implemented.')
+        raise omero.OmeroFSError('Method not yet implemented.')
         
         
     def getMonitorDirectory(self, id, relPath, filter, current=None):
@@ -232,8 +243,8 @@ class MonitorServerI(monitors.MonitorServer):
             dirList = fullPath.dirs(filter)
             fileList = fullPath.files(filter)
         except Exception, e:
-            log.error('Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))
-            raise monitors.OmeroFSError('Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))       
+            self.log.error('Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))
+            raise omero.OmeroFSError(reason='Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))       
 
         fullList = []
         for d in dirList:
@@ -271,8 +282,8 @@ class MonitorServerI(monitors.MonitorServer):
             dirList = fullPath.dirs(filter)
             fileList = fullPath.files(filter)
         except Exception, e:
-            log.error('Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))
-            raise monitors.OmeroFSError('Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))       
+            self.log.error('Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))
+            raise omero.OmeroFSError(reason='Unable to get directory of  ' + str(fullPath) + ' : ' + str(e))       
     
         fullList = []
         for d in dirList:
@@ -302,14 +313,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
     
         try:
             name = pathModule.path(pathString).name
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' base name : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' base name : ' + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' base name : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' base name : ' + str(e))       
 
         return name
     
@@ -333,8 +344,8 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
 
         stats = monitors.FileStats()
         
@@ -357,8 +368,8 @@ class MonitorServerI(monitors.MonitorServer):
                 stats.type = monitors.FileType.Unknown
                     
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' stats : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' stats : '  + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' stats : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' stats : '  + str(e))       
     
         return stats
 
@@ -382,14 +393,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
 
         try:
             size = pathModule.path(pathString).size
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' size : ' +  str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' size : '  + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' size : ' +  str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' size : '  + str(e))       
 
         return size
     
@@ -413,14 +424,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
 
         try:
             owner = pathModule.path(pathString).owner
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' owner : '  + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' owner : ' +  str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' owner : '  + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' owner : ' +  str(e))       
 
         return owner
     
@@ -444,14 +455,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
 
         try:
             ctime = pathModule.path(pathString).ctime
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' ctime : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' ctime : ' + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' ctime : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' ctime : ' + str(e))       
 
         return ctime
 
@@ -475,14 +486,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
 
         try:
             mtime = pathModule.path(pathString).mtime
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' mtime : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' mtime : ' + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' mtime : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' mtime : ' + str(e))       
 
         return mtime
     
@@ -506,14 +517,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
    
         try:
             atime = pathModule.path(pathString).atime
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' atime : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' atime : ' + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' atime : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' atime : ' + str(e))       
     
         return atime
 
@@ -537,14 +548,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
    
         try:
             isdir = pathModule.path(pathString).isdir
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' isdir : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' isdir : ' + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' isdir : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' isdir : ' + str(e))       
     
         return isdir
 
@@ -568,14 +579,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
    
         try:
             isfile = pathModule.path(pathString).isfile
         except Exception, e:
-            log.error('Failed to get  ' + str(fileId) + ' isfile : ' + str(e))
-            raise monitors.OmeroFSError('Failed to get  ' + str(fileId) + ' isfile : ' + str(e))       
+            self.log.error('Failed to get  ' + str(fileId) + ' isfile : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to get  ' + str(fileId) + ' isfile : ' + str(e))       
     
         return isfile
         
@@ -598,14 +609,14 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
     
         try:
             sha1 = self._getSHA1(pathString)
         except Exception, e:
-            log.error('Failed to get SHA1 digest  ' + pathString + ' : ' + str(e))
-            raise monitors.OmeroFSError(str(e))       
+            self.log.error('Failed to get SHA1 digest  ' + pathString + ' : ' + str(e))
+            raise omero.OmeroFSError(reason=str(e))       
 
         return sha1
         
@@ -653,8 +664,8 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             pathString = self._getPathString(fileId)
         except Exception, e:
-            log.error('File ID  ' + str(fileId) + ' not on this FSServer')
-            raise monitors.OmeroFSError('File ID  ' + str(fileId) + ' not on this FSServer')       
+            self.log.error('File ID  ' + str(fileId) + ' not on this FSServer')
+            raise omero.OmeroFSError(reason='File ID  ' + str(fileId) + ' not on this FSServer')       
 
         try:
             file = open(pathString, 'rb')
@@ -662,8 +673,8 @@ class MonitorServerI(monitors.MonitorServer):
             bytes = file.read(size)
             file.close()
         except Exception, e:
-            log.error('Failed to read data from  ' + str(fileId) + ' : ' + str(e))
-            raise monitors.OmeroFSError('Failed to read data from  ' + str(fileId) + ' : ' + str(e))       
+            self.log.error('Failed to read data from  ' + str(fileId) + ' : ' + str(e))
+            raise omero.OmeroFSError(reason='Failed to read data from  ' + str(fileId) + ' : ' + str(e))       
     
         return bytes      
        
@@ -672,7 +683,7 @@ class MonitorServerI(monitors.MonitorServer):
         try:
             file = open(pathString, 'rb')
         except Exception, e:
-            log.error('Failed to open file ' + pathString + ' : ' + str(e))
+            self.log.error('Failed to open file ' + pathString + ' : ' + str(e))
             raise Exception('Failed to open file ' + pathString + ' : ' + str(e))       
 
         digest = sha()
@@ -683,7 +694,7 @@ class MonitorServerI(monitors.MonitorServer):
                     digest.update(block)
                     block = file.read(1024)
             except Exception, e:
-                log.error('Failed to SHA1 digest file ' + pathString + ' : ' + str(e))
+                self.log.error('Failed to SHA1 digest file ' + pathString + ' : ' + str(e))
                 raise Exception('Failed to SHA1 digest file ' + pathString + ' : ' + str(e))       
         finally:
             file.close()
@@ -736,9 +747,10 @@ class MonitorServerI(monitors.MonitorServer):
         proxy = self.proxies[monitorId]
         
         try:
+            self.log.info('Event notification on monitor id= %s', monitorId)
+            self.log.debug(' ...notifications are: %s', str(eventList))
             proxy.fsEventHappened(monitorId, eventList)
-            log.debug('Event notification on monitor id=' + monitorId + ' => ' + str(eventList))
         except Exception, e:
-            log.info('Callback to monitor id=' + monitorId + ' failed. Reason: ' + str(e))
+            self.log.info('Callback to monitor id=' + monitorId + ' failed. Reason: ' + str(e))
 
 

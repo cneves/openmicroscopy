@@ -29,15 +29,15 @@ import ome.system.Roles;
  * context should pass through an implementation of this interface.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2665 $, $Date: 2008-08-06 10:39:02 +0100 (Wed, 06 Aug 2008) $
  * @see Token
  * @see Details
  * @see Permissions
  * @see ACLEventListener
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-08-06 10:39:02 +0100 (Wed, 06 Aug 2008) $")
+@RevisionNumber("$Revision: 2665 $")
 public interface SecuritySystem {
 
     // ~ Login/logout

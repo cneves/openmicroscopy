@@ -30,13 +30,13 @@ import ome.util.Filterable;
  * {@link ome.logic.UpdateImpl} save methods.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2647 $, $Date: 2008-07-30 21:58:44 +0100 (Wed, 30 Jul 2008) $
  * @see ome.api.IUpdate
  * @see ome.logic.UpdateImpl
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-07-30 21:58:44 +0100 (Wed, 30 Jul 2008) $")
+@RevisionNumber("$Revision: 2647 $")
 public class UpdateFilter extends ContextFilter {
 
     /**

@@ -20,7 +20,7 @@ import ome.model.meta.ExperimenterGroup;
  * a {@link Permissions umask}.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2243 $, $Date: 2008-02-22 09:35:54 +0000 (Fri, 22 Feb 2008) $
  * @see EventType
  * @see ExperimenterGroup
  * @see Permissions

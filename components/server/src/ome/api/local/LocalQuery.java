@@ -22,7 +22,7 @@ import ome.services.query.Query;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Revision$ $Date$)
+ * @version 1.0 <small> (<b>Internal version:</b> $Revision: 1966 $ $Date: 2007-12-12 19:44:06 +0000 (Wed, 12 Dec 2007) $)
  *          </small>
  * @since OMERO3.0
  */

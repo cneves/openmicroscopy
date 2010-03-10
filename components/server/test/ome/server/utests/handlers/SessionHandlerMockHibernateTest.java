@@ -44,7 +44,7 @@ import org.testng.annotations.Test;
 /**
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 3448 $ $Date: 2009-02-04 15:55:18 +0000 (Wed, 04 Feb 2009) $) </small>
  * @since Omero 2.0
  */
 @Test(groups = { "hibernate", "stateful", "ticket:326" })

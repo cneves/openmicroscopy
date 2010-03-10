@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ConfigTest.java 2135 2008-02-07 11:21:08Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -26,7 +26,7 @@ import org.testng.annotations.Test;
  * (stateless/client-side) tests. See source code documentation for more.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2135 $, $Date: 2008-02-07 11:21:08 +0000 (Thu, 07 Feb 2008) $
  * @since 3.0-M3
  */
 /*

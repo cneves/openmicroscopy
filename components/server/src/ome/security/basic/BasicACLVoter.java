@@ -34,15 +34,15 @@ import org.springframework.util.Assert;
 /**
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 3447 $, $Date: 2009-02-04 15:55:18 +0000 (Wed, 04 Feb 2009) $
  * @see Token
  * @see SecuritySystem
  * @see Details
  * @see Permissions
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2009-02-04 15:55:18 +0000 (Wed, 04 Feb 2009) $")
+@RevisionNumber("$Revision: 3447 $")
 public class BasicACLVoter implements ACLVoter {
 
     private final static Log log = LogFactory.getLog(BasicACLVoter.class);

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: WriteSecurityTest.java 3075 2008-11-10 16:45:20Z andrew $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

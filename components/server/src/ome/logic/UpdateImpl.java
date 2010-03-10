@@ -14,9 +14,10 @@
 
 package ome.logic;
 
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.concurrent.ExecutionException;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
@@ -26,7 +27,6 @@ import ome.api.ServiceInterface;
 import ome.api.local.LocalQuery;
 import ome.api.local.LocalUpdate;
 import ome.conditions.ApiUsageException;
-import ome.conditions.InternalException;
 import ome.conditions.ValidationException;
 import ome.model.IObject;
 import ome.model.meta.EventLog;
@@ -37,14 +37,13 @@ import ome.services.fulltext.FullTextIndexer;
 import ome.services.fulltext.FullTextThread;
 import ome.services.sessions.SessionManager;
 import ome.services.util.Executor;
+import ome.tools.hibernate.ReloadFilter;
 import ome.tools.hibernate.UpdateFilter;
 import ome.util.Utils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.hibernate.HibernateException;
 import org.hibernate.Session;
-import org.springframework.orm.hibernate3.HibernateCallback;
 import org.springframework.orm.hibernate3.SessionFactoryUtils;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  * implementation of the IUpdate service interface
  * 
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 4964 $ $Date: 2009-09-14 19:01:34 +0100 (Mon, 14 Sep 2009) $) </small>
  * @since OMERO 3.0
  */
 @Transactional(readOnly = false)
@@ -145,7 +144,7 @@ public class UpdateImpl extends AbstractLevel1Service implements LocalUpdate {
             public IObject[] run(IObject[] value, UpdateFilter filter, Session s) {
                 IObject[] copy = new IObject[value.length];
                 for (int i = 0; i < value.length; i++) {
-                   copy[i] = internalMerge(value[i], filter, s);
+                    copy[i] = internalMerge(value[i], filter, s);
                 }
                 return copy;
             }
@@ -153,22 +152,19 @@ public class UpdateImpl extends AbstractLevel1Service implements LocalUpdate {
     }
 
     @RolesAllowed("user")
-    public long[] saveAndReturnIds(IObject[] graph) {
+    public List<Long> saveAndReturnIds(IObject[] graph) {
 
         if (graph == null || graph.length == 0) {
-            return new long[0]; // EARLY EXIT!
+            return Collections.emptyList(); // EARLY EXIT!
         }
 
-        final long[] ids = new long[graph.length];
-        doAction(graph, new UpdateAction<IObject[]>() {
+        final List<Long> ids = new ArrayList<Long>(graph.length);
+        final ReloadFilter filter = new ReloadFilter(session());
+        doAction(graph, filter, new UpdateAction<IObject[]>() {
             @Override
             public IObject[] run(IObject[] value, UpdateFilter filter, Session s) {
                 for (int i = 0; i < value.length; i++) {
-                    if (i%500 == 0) {
-                        s.flush();
-                        s.clear();
-                    }
-                    ids[i] = internalSave(value[i], filter, s);
+                    ids.add(i, internalSave(value[i], (ReloadFilter) filter, s));
                 }
                 return null;
             }
@@ -245,7 +241,7 @@ public class UpdateImpl extends AbstractLevel1Service implements LocalUpdate {
      * {@link ome.tools.hibernate.MergeEventListener} needs to be moved to
      * {@link UpdateFilter} or to another event listener.
      */
-    protected Long internalSave(IObject obj, UpdateFilter filter,
+    protected Long internalSave(IObject obj, ReloadFilter filter,
             Session session) {
         if (getBeanHelper().getLogger().isDebugEnabled()) {
             getBeanHelper().getLogger().debug(" Internal save. ");
@@ -297,6 +293,12 @@ public class UpdateImpl extends AbstractLevel1Service implements LocalUpdate {
     @SuppressWarnings("unchecked")
     private <T> T doAction(final T graph, final UpdateAction<T> action) {
         final UpdateFilter filter = new UpdateFilter();
+        return doAction(graph, filter, action);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T doAction(final T graph, final UpdateFilter filter,
+            final UpdateAction<T> action) {
         final Session session = session();
         T retVal;
         beforeUpdate(graph, filter);

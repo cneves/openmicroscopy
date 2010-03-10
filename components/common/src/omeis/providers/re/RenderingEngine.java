@@ -9,6 +9,7 @@ package omeis.providers.re;
 
 // Java imports
 import java.util.List;
+import java.util.Map;
 
 // Third-party libraries
 
@@ -56,7 +57,7 @@ import omeis.providers.re.data.PlaneDef;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 5709 $ $Date:
  *          2005/06/12 23:28:59 $) </small>
  * @since OME2.2
  */
@@ -215,6 +216,13 @@ public interface RenderingEngine extends StatefulServiceInterface {
      * <code>RenderingDef</code> is incompatible due to differing pixels sets.
      */
     public void loadRenderingDef(long renderingDefId);
+    
+    /**
+     * Informs the rendering engine that it should render a set of overlays on
+     * each rendered frame. These are expected to be binary masks.
+     * @param overlays Binary mask to color map.
+     */
+    public void setOverlays(Map<byte[], Integer> overlays);
 
     /** Creates a instance of the rendering engine. */
     public void load();

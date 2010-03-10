@@ -30,6 +30,7 @@ import omero.api.IProjectionPrx;
 import omero.api.IQueryPrx;
 import omero.api.IRenderingSettingsPrx;
 import omero.api.IRepositoryInfoPrx;
+import omero.api.IRoiPrx;
 import omero.api.IScriptPrx;
 import omero.api.ISessionPrx;
 import omero.api.ISharePrx;
@@ -46,6 +47,7 @@ import omero.api.ThumbnailStorePrx;
 //import omero.system.OmeroContext;
 import omero.api.ServiceFactoryPrx;
 import omero.api.RenderingEnginePrx;
+import omero.constants.METADATASTORE;
 import omero.grid.InteractiveProcessorPrx;
 import omero.model.Job;
 
@@ -209,9 +211,7 @@ public class TestServiceFactory implements ServiceFactoryPrx
 
     public ThumbnailStorePrx createThumbnailStore() throws ServerError
     {
-        // TODO Auto-generated method stub
-        //return null;
-        throw new RuntimeException("Not implemented yet.");
+        return null;
     }
 
     public ThumbnailStorePrx createThumbnailStore(Map<String, String> arg0)
@@ -251,6 +251,10 @@ public class TestServiceFactory implements ServiceFactoryPrx
 
     public ServiceInterfacePrx getByName(String arg0) throws ServerError
     {
+    	if (arg0.equals(METADATASTORE.value))
+    	{
+    		return new TestMetadataStoreService();
+    	}
         return null;
     }
 
@@ -381,9 +385,7 @@ public class TestServiceFactory implements ServiceFactoryPrx
     public IRenderingSettingsPrx getRenderingSettingsService()
             throws ServerError
     {
-        // TODO Auto-generated method stub
-        //return null;
-        throw new RuntimeException("Not implemented yet.");
+        return null;
     }
 
     public IRenderingSettingsPrx getRenderingSettingsService(
@@ -469,9 +471,7 @@ public class TestServiceFactory implements ServiceFactoryPrx
 
     public ITypesPrx getTypesService() throws ServerError
     {
-        // TODO Auto-generated method stub
-        //return null;
-        throw new RuntimeException("Not implemented yet.");
+    	return null;
     }
 
     public ITypesPrx getTypesService(Map<String, String> arg0)
@@ -511,9 +511,7 @@ public class TestServiceFactory implements ServiceFactoryPrx
 
     public long keepAllAlive(ServiceInterfacePrx[] arg0)
     {
-        // TODO Auto-generated method stub
-        //return 0;
-        throw new RuntimeException("Not implemented yet.");
+		return arg0.length;
     }
 
     public long keepAllAlive(ServiceInterfacePrx[] arg0,
@@ -1009,5 +1007,32 @@ public class TestServiceFactory implements ServiceFactoryPrx
     {
         return null;
     }
+
+    public IRoiPrx getRoiService() throws ServerError {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    public IRoiPrx getRoiService(Map<String, String> __ctx) throws ServerError {
+        // TODO Auto-generated method stub
+        return null;
+    }
     
+    public omero.api.ExporterPrx createExporter() throws ServerError {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    public omero.api.ExporterPrx createExporter(Map<String, String> __ctx) throws ServerError {
+        // TODO Auto-generated method stub
+        return null;
+    }
+    
+    public omero.grid.SharedResourcesPrx sharedResources() {
+    	return null;
+    }
+
+    public omero.grid.SharedResourcesPrx sharedResources(java.util.Map<java.lang.String,java.lang.String> arg0) {
+    	return null;
+    }
 }

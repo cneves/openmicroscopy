@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: PojosImpl.java 4122 2009-03-22 19:42:40Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -58,7 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
  * implementation of the Pojos service interface.
  *
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date: 2007-10-03
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 4122 $ $Date: 2007-10-03
  *          13:25:20 +0100 (Wed, 03 Oct 2007) $) </small>
  * @since OMERO 2.0
  */

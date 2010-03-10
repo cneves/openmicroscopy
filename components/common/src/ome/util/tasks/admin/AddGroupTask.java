@@ -39,12 +39,12 @@ import static ome.util.tasks.admin.AddGroupTask.Keys.*;
  * this.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1282 $, $Date: 2007-02-15 17:13:20 +0000 (Thu, 15 Feb 2007) $
  * @see AdminTask
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-02-15 17:13:20 +0000 (Thu, 15 Feb 2007) $")
+@RevisionNumber("$Revision: 1282 $")
 public class AddGroupTask extends AdminTask {
 
     /**

@@ -7,7 +7,7 @@
 <!--
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# $Id$
+# $Id: datalayer.xml 4824 2009-09-07 08:28:23Z jmoore $
 #
 # Copyright 2006 University of Dundee. All rights reserved.
 # Use is subject to license terms supplied in LICENSE.txt
@@ -37,6 +37,14 @@
   -->
   <bean id="uuid_object" class="java.util.UUID" factory-method="randomUUID"/>
   <bean id="uuid" factory-bean="uuid_object" factory-method="toString"/>
+
+  <!-- TODO Violates DAG: refactory -->
+  <bean id="omero.db.uuid" factory-bean="internal-ome.api.IConfig" factory-method="getDatabaseUuid"/>
+
+  <bean id="databaseIdentity" class="ome.services.db.DatabaseIdentity">
+    <constructor-arg index="0" value="${omero.db.authority}"/>
+    <constructor-arg index="1" ref="omero.db.uuid"/>
+  </bean>
 
   <!--  Scope: private -->
 
@@ -116,7 +124,7 @@
     <property name="driverProperties">
       <props>
         <prop key="driverClassName">org.postgresql.Driver</prop>
-        <prop key="url">jdbc:postgresql://${omero.db.host}/${omero.db.name}</prop>
+        <prop key="url">jdbc:postgresql://${omero.db.host}:${omero.db.port}/${omero.db.name}</prop>
         <prop key="user">${omero.db.user}</prop>
         <prop key="password">${omero.db.pass}</prop>
       </props>

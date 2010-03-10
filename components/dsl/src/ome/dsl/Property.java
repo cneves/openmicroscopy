@@ -25,7 +25,7 @@ import java.util.Set;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 3725 $ $Date: 2009-02-24 10:18:02 +0000 (Tue, 24 Feb 2009) $) </small>
  * @since OMERO-3.0
  */
 public abstract class Property { // TODO need to define equality so that two

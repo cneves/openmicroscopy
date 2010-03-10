@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: VersionTest.java 3352 2009-01-26 14:00:59Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -21,7 +21,7 @@ public class VersionTest extends TestCase {
 	
 	@Test( groups = {"svnonly","ignore"})
     public void testGetSvnKeyword() throws Exception {
-        String versionStr = Version.stringFromSvnString("$Revision$");
+        String versionStr = Version.stringFromSvnString("$Revision: 3352 $");
         Integer version = Integer.valueOf(versionStr);
         checkVersion(version);
     }
@@ -73,12 +73,12 @@ public class VersionTest extends TestCase {
     }
 }
 
-@RevisionNumber("$Revision$")
-@RevisionDate("$Date$")
+@RevisionNumber("$Revision: 3352 $")
+@RevisionDate("$Date: 2009-01-26 14:00:59 +0000 (Mon, 26 Jan 2009) $")
 class Blank {
 }
 
-@RevisionDate("$Date: 1970-01-01 00:00:01 +0100 (Thu, 01 Jan 1970) $")
-@RevisionNumber("$Revision: 1 $")
+@RevisionDate("$Date: 2009-01-26 14:00:59 +0000 (Mon, 26 Jan 2009) $")
+@RevisionNumber("$Revision: 3352 $")
 class Dummy {
 }

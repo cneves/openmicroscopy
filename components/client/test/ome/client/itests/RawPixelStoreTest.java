@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: RawPixelStoreTest.java 2147 2008-02-07 11:21:51Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

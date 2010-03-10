@@ -37,7 +37,7 @@ import ome.parameters.Parameters;
  * 
  * 
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 1633 $ $Date: 2007-06-12 22:45:32 +0100 (Tue, 12 Jun 2007) $) </small>
  * @since OMERO 3.0
  * @see ome.services.query.IObjectClassQuery
  */

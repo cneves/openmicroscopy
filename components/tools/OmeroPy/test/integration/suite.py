@@ -13,7 +13,11 @@
 
 """
 
+import logging
+logging.basicConfig(level=logging.WARN)
+
 import unittest
+import xmlrunner
 
 class TopLevel(unittest.TestCase):
     pass
@@ -29,6 +33,7 @@ def additional_tests():
     suite.addTest(load("test.integration.icontainer"))
     suite.addTest(load("test.integration.isession"))
     suite.addTest(load("test.integration.ishare"))
+    suite.addTest(load("test.integration.itypes"))
     suite.addTest(load("test.integration.metadatastore"))
     suite.addTest(load("test.integration.scripts"))
     suite.addTest(load("test.integration.files"))
@@ -36,4 +41,11 @@ def additional_tests():
     suite.addTest(load("test.integration.proj"))
     suite.addTest(load("test.integration.tickets1000"))
     suite.addTest(load("test.integration.tickets2000"))
+    suite.addTest(load("test.scripts.suite._additional_tests"))
+    suite.addTest(load("test.gateway.suite._additional_tests"))
+    suite.addTest(load("test.tablestest.suite._additional_tests"))
+    suite.addTest(load("test.tablestest.integration_suite._additional_tests"))
     return suite
+
+if __name__ == "__main__":
+    xmlrunner.XMLTestRunner(output='target/test-reports').run(additional_tests())

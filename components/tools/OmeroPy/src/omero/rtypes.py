@@ -1,11 +1,12 @@
 """
-/*
- *   $Id$
- *
- *   Copyright 2008 Glencoe Software, Inc. All rights reserved.
- *   Use is subject to license terms supplied in LICENSE.txt
- *
- */
+::
+    /*
+     *   $Id$
+     *
+     *   Copyright 2008 Glencoe Software, Inc. All rights reserved.
+     *   Use is subject to license terms supplied in LICENSE.txt
+     *
+     */
 """
 
 """
@@ -19,6 +20,8 @@ omero.rtypes as well as the omero/rtypes.{h,cpp} files.
 """
 
 import omero, Ice
+import omero_RTypes_ice
+import omero_Scripts_ice
 
 def rtype(val):
     """

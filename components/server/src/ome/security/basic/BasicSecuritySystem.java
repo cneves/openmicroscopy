@@ -19,6 +19,7 @@ import ome.api.local.LocalUpdate;
 import ome.conditions.ApiUsageException;
 import ome.conditions.InternalException;
 import ome.conditions.SecurityViolation;
+import ome.conditions.SessionTimeoutException;
 import ome.model.IObject;
 import ome.model.enums.EventType;
 import ome.model.internal.Details;
@@ -30,10 +31,12 @@ import ome.model.meta.EventLog;
 import ome.model.meta.Experimenter;
 import ome.model.meta.ExperimenterGroup;
 import ome.model.meta.GroupExperimenterMap;
+import ome.model.roi.Shape;
 import ome.security.AdminAction;
 import ome.security.SecureAction;
 import ome.security.SecuritySystem;
 import ome.security.SystemTypes;
+import ome.services.messages.ShapeChangeMessage;
 import ome.services.sessions.SessionManager;
 import ome.services.sessions.events.UserGroupUpdateEvent;
 import ome.services.sessions.stats.PerSessionStats;
@@ -61,7 +64,7 @@ import org.springframework.util.Assert;
  * {@link CurrentDetails} to provide the security infrastructure.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision: 1581 $, $Date: 2007-06-02 12:31:30 +0200 (Sat, 02 Jun
+ * @version $Revision: 6234 $, $Date: 2007-06-02 12:31:30 +0200 (Sat, 02 Jun
  *          2007) $
  * @see Token
  * @see SecuritySystem
@@ -69,8 +72,8 @@ import org.springframework.util.Assert;
  * @see Permissions
  * @since 3.0-M3
  */
-@RevisionDate("$Date: 2007-06-02 12:31:30 +0200 (Sat, 02 Jun 2007) $")
-@RevisionNumber("$Revision: 1581 $")
+@RevisionDate("$Date: 2010-03-09 15:20:31 +0000 (Tue, 09 Mar 2010) $")
+@RevisionNumber("$Revision: 6234 $")
 public class BasicSecuritySystem implements SecuritySystem,
         ApplicationContextAware {
 
@@ -278,13 +281,28 @@ public class BasicSecuritySystem implements SecuritySystem,
     // =========================================================================
 
     public void loadEventContext(boolean isReadOnly) {
+        loadEventContext(isReadOnly, false);
+    }
+
+    public void loadEventContext(boolean isReadOnly, boolean isClose) {
 
         final LocalAdmin admin = (LocalAdmin) sf.getAdminService();
         final LocalUpdate update = (LocalUpdate) sf.getUpdateService();
 
         // Call to session manager throws an exception on failure
         final Principal p = clearAndCheckPrincipal();
-        final EventContext ec = sessionManager.getEventContext(p);
+
+        // ticket:1855 - Catching SessionTimeoutException in order to permit
+        // the close of a stateful service.
+        EventContext ec;
+        try {
+            ec = sessionManager.getEventContext(p);
+        } catch (SessionTimeoutException ste) {
+            if (!isClose) {
+                throw ste;
+            }
+            ec = (EventContext) ste.sessionContext;
+        }
 
         // Refill current details
         cd.copy(ec);
@@ -308,8 +326,8 @@ public class BasicSecuritySystem implements SecuritySystem,
 
         if (!ec.getMemberOfGroupsList().contains(grp.getId())) {
             throw new SecurityViolation(String.format(
-                    "User %s is not a member of group %s", p.getName(), p
-                            .getGroup()));
+                    "User is not a member of group %s and cannot login",
+                            p.getGroup()));
         }
         tokenHolder.setToken(grp.getGraphHolder());
 
@@ -376,14 +394,26 @@ public class BasicSecuritySystem implements SecuritySystem,
         }
 
         boolean foundAdminType = false;
+        List<EventLog> foundShapes = new ArrayList<EventLog>();
         for (EventLog log : getLogs()) {
             String t = log.getEntityType();
+            String a = log.getAction();
             if (Experimenter.class.getName().equals(t)
                     || ExperimenterGroup.class.getName().equals(t)
                     || GroupExperimenterMap.class.getName().equals(t)) {
                 foundAdminType = true;
             }
+            try {
+                if (Shape.class.isAssignableFrom(Class.forName(t))) {
+                    if ("INSERT".equals(a) || "UPDATE".equals(a)) {
+                        foundShapes.add(log);
+                    }
+                }
+            } catch (ClassNotFoundException e) {
+                throw new InternalException("Shape != Class.forName: " + t);
+            }
         }
+        // publish message if administrative type is modified
         if (foundAdminType) {
             if (ctx == null) {
                 log.error("No context found for publishing");
@@ -391,6 +421,11 @@ public class BasicSecuritySystem implements SecuritySystem,
                 this.ctx.publishEvent(new UserGroupUpdateEvent(this));
             }
         }
+        // publish message if shape is created or updated
+        if (foundShapes.size() > 0) {
+            this.ctx.publishEvent(new ShapeChangeMessage(this, foundShapes));
+        }
+        
         cd.clearLogs();
     }
 

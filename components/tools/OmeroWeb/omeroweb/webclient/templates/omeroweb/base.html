@@ -5,19 +5,19 @@
 
 {% block header %}
 <div id="path">
-    <div id="basket"><a href="{% get_webclient_root_url %}/basket/"><img src="{% get_webclient_static_url %}/images/basket.png" /> {% trans "BASKET" %}</a> {% trans "contains" %} <span id="cartTotal">{{ nav.basket }}</span> {% trans "items" %}</div>
+    <div id="basket"><a href="{% url basket_action %}"><img src="{% url webstatic "images/basket.png" %}" /> {% trans "BASKET" %}</a> {% trans "contains" %} <span id="cartTotal">{{ nav.basket }}</span> {% trans "items" %}</div>
     <div id="logout">
-        | {% for field in form_active_group %} {% trans "group" %}: {{ field }} {% if field.errors %}{{ field.errors }}{% endif %}{% endfor %}
-        | <a href="{% get_webclient_root_url %}/myaccount/details/">{% trans "my account" %}</a> | <a href="{% get_webclient_root_url %}/logout/">{% trans "logout" %}</a> |
+        | {% for field in form_active_group %} {% trans "current group" %}: {{ field }} {% if field.errors %}{{ field.errors }}{% endif %}{% endfor %}
+        | <a href="{% url weblogout %}">{% trans "logout" %}</a> |
     </div>
     
 </div>
 
 <div id="breadcrumb">
     <ol class="breadcrumb">
-        <!--<li class="breadcrumb">{{ eContext.user.omeName }}@{{ nav.blitz }}</li>-->
+        <li><a href="{% url webindex %}">{{ eContext.user.getInitialName }}</a></li>
         {% for b in eContext.breadcrumb %}
-            <li class="breadcrumb"> > {{ b|safe }}</li>
+            <li> > {{ b|safe }}</li>
         {% endfor %}
     </ol>
 </div>

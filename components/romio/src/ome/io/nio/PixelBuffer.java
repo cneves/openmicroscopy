@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
  * 
  * @author Chris Allan
  *         &nbsp;<a href="mailto:callan@blackcat.ca">callan@blackcat.ca</a>
- * @version $Revision$
+ * @version $Revision: 2796 $
  * @since 3.0
  * 
  */

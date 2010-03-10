@@ -1,12 +1,13 @@
 package ome.formats.importer.cli;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
+import static ome.formats.importer.ImportEvent.*;
 import ome.formats.importer.IObservable;
 import ome.formats.importer.IObserver;
-import ome.formats.importer.util.Actions;
-import omero.model.IObject;
+import ome.formats.importer.ImportEvent;
+import omero.model.Pixels;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
  * Basic import process monitor that writes information to the log.
@@ -18,45 +19,18 @@ public class LoggingImportMonitor implements IObserver
 {
     private static Log log = LogFactory.getLog(LoggingImportMonitor.class);
     
-    public void update(IObservable importLibrary, Object message, Object[] args)
+    public void update(IObservable importLibrary, ImportEvent event)
     {
-
-        if (message.equals(Actions.IMPORT_STEP))
-        {
-            /*
-            args2[] = {series, step, reader.getSeriesCount()};
-             */
-            String s = String.format(
-                    "Message: %s Image: %d Series: %d Total Series: %d",
-                    message,
-                    (Integer) args[1],
-                    (Integer) args[0],
-                    (Integer) args[2]);
-            log.info(s);
+        if (event instanceof IMPORT_DONE) {
+            IMPORT_DONE ev = (IMPORT_DONE) event;
+            log.info(event.toLog());
+            System.err.println("Imported pixels:");
+            for (Pixels p : ev.pixels) {
+                System.out.println(p.getId().getValue());
+            }
         }
-        else
-        {
-            /*
-            XXX: Modified to handle new (IObject) target from previous
-            (Dataset) only target.
-            (String)  args[0] = shortName;   (Dataset) args[4] = getDataset();
-            (Integer) args[1] = index;       (Long) args[5] = pixId;
-            (Integer) args[2] = numDone;     (Integer) args[6] = count;
-            (Integer) args[3] = total;       (Integer) args[7] = series;
-             */
-            String s = String.format(
-                    "Message: %s Name: %s Index: %d nDone: %d Total: %d " +
-                    "Dataset: %s Pixels Id: %d Image Count: %d Series: %d",
-                    message,
-                    (String) args[0],
-                    (Integer) args[1],
-                    (Integer) args[2],
-                    (Integer) args[3],
-                    (IObject) args[4],
-                    (Long) args[5],
-                    (Integer) args[6],
-                    (Integer) args[7]);
-            log.info(s);
+        else if (log.isDebugEnabled()) {
+            log.debug(event.toLog());
         }
     }
 }

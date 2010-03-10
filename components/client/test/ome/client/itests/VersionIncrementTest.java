@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: VersionIncrementTest.java 1504 2007-05-02 07:14:44Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

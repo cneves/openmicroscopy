@@ -32,7 +32,6 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hibernate.PropertyValueException;
-import org.perf4j.LoggingStopWatch;
 import org.perf4j.StopWatch;
 import org.perf4j.commonslog.CommonsLogStopWatch;
 import org.springframework.context.ApplicationEvent;
@@ -53,10 +52,6 @@ public class ServiceHandler implements MethodInterceptor, ApplicationListener {
 
     private final CurrentDetails cd;
 
-    private final long methodTimeError;
-
-    private final long methodTimeWarn;
-
     public void onApplicationEvent(ApplicationEvent arg0) {
         if (arg0 instanceof RegisterServiceCleanupMessage) {
             RegisterServiceCleanupMessage cleanup = (RegisterServiceCleanupMessage) arg0;
@@ -64,10 +59,8 @@ public class ServiceHandler implements MethodInterceptor, ApplicationListener {
         }
     }
 
-    public ServiceHandler(CurrentDetails cd, long methodTimeWarn, long methodTimeError) {
+    public ServiceHandler(CurrentDetails cd) {
         this.cd = cd;
-        this.methodTimeWarn = methodTimeWarn;
-        this.methodTimeError = methodTimeError;
     }
 
     /**
@@ -118,16 +111,16 @@ public class ServiceHandler implements MethodInterceptor, ApplicationListener {
             if (log.isInfoEnabled()) {
                 log.info(finalOutput);
             }
-            
+
             // Logging long invocations. Very long invocations are indicative
             // of a server undergoing stress.
             long time = stopWatch.getElapsedTime();
             String msg = String.format("Method %s.%s invocation took %s",
                                        arg0.getMethod().getDeclaringClass(),
                                        arg0.getMethod().getName(), time);
-            if (time > methodTimeError) {
+            if (time > 10 * 1000L) {
                 log.error(msg);
-            } else if (time > methodTimeWarn) {
+            } else if (time > 2 * 1000L) {
                 log.warn(msg);
             }
             cleanup();

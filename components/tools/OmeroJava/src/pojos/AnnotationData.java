@@ -7,8 +7,12 @@
 
 package pojos;
 
+//Java imports
 import java.sql.Timestamp;
 
+//Third-party libraries
+
+//Application-internal dependencies
 import static omero.rtypes.*;
 import omero.model.Annotation;
 
@@ -76,7 +80,7 @@ public abstract class AnnotationData extends DataObject {
     }
 
     /**
-     * Retrieves the {@link Annotation#getName() name} of the underlying
+     * Retrieves the {@link Annotation#getNs() nameSpace} of the underlying
      * {@link Annotation} instance.
      * 
      * @return See above.
@@ -100,7 +104,7 @@ public abstract class AnnotationData extends DataObject {
 
     /**
      * Sets the annotation value. If the improper content is given for the
-     * current {@link Annotation} {@link #getAnnotationType()}, then an
+     * current {@link Annotation}, then an
      * {@link IllegalArgumentException} will be thrown.
      * 
      * @param content

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ExtendedMetadata.java 2997 2008-10-24 19:54:20Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -40,12 +40,12 @@ import org.springframework.context.event.ContextRefreshedEvent;
  * construction, the metadata is created and cached for later use.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2997 $, $Date: 2008-10-24 20:54:20 +0100 (Fri, 24 Oct 2008) $
  * @see SessionFactory
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-10-24 20:54:20 +0100 (Fri, 24 Oct 2008) $")
+@RevisionNumber("$Revision: 2997 $")
 public class ExtendedMetadata implements ApplicationListener {
 
     private final static Log log = LogFactory.getLog(ExtendedMetadata.class);

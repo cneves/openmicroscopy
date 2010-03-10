@@ -1,16 +1,14 @@
 #!/usr/bin/env python
 """
    Scripting types
+       - Classes:
+           - Type        --  Top of parameter type hierarchy
+           - Long        --
+           - String      --
+           - Bool        --
 
-   Classes:
-       Type          --  Top of parameter type hierarchy
-         Long        --
-         String      --
-         Bool        --
-
-   Functions:
-       client        -- Produces an omero.client object with
-                        given input/output constraints.
+       - Functions:
+           - client      -- Produces an omero.client object with given input/output constraints.
 
    Copyright 2008 Glencoe Software, Inc. All rights reserved.
    Use is subject to license terms supplied in LICENSE.txt
@@ -18,14 +16,13 @@
 """
 
 import exceptions, omero
-from omero_ext import pysys
 from omero.rtypes import *
 
 class Type:
     def __init__(self, name, optional = False, out = False):
         self.name = name
         self.type = None
-        self.optional = False
+        self.optional = optional
         self._in = True
         self._out = out
     def out(self):
@@ -43,15 +40,15 @@ class Type:
 class Long(Type):
     def __init__(self, name, optional = False, out = False):
         Type.__init__(self, name, optional, out)
-        self.type = RLongI()
+        self.type = rlong(0)
 class String(Type):
     def __init__(self, name, optional = False, out = False):
         Type.__init__(self, name, optional, out)
-        self.type = RStringI()
+        self.type = rstring("")
 class Bool(Type):
     def __init__(self, name, optional = False, out = False):
         Type.__init__(self, name, optional, out)
-        self.type = RBoolI()
+        self.type = rbool(False)
 class Point(Type):
     def __init__(self, name, optional = False, out = False):
         Type.__init__(self, name, optional, out)
@@ -69,11 +66,20 @@ class Map(Type):
         Type.__init__(self, name, optional, out)
         self.type = rmap(contents)
 
+class ParseExit(exceptions.Exception):
+    """
+    Raised when this script should just parse parameters and return.
+    """
+
+    def __init__(self, params):
+        exceptions.Exception.__init__(self)
+        self.params = params
+
 def client(name, description = None, *args, **kwargs):
     """
     Entry point for all script engine scripts.
 
-    Typical usage consists of:
+    Typical usage consists of::
 
         client = omero.scripts.client("name","description", \
             omero.scripts.Long("name"),...)
@@ -86,7 +92,7 @@ def client(name, description = None, *args, **kwargs):
     Possible types are all subclasses of omero.scripts.Type
 
     To change the omero.model.Format of the stdout and stderr produced by
-    this script, use the constructor arguments:
+    this script, use the constructor arguments::
 
         client = omero.scripts.client(..., \
             stdoutFormat = "text/plain",
@@ -99,14 +105,21 @@ def client(name, description = None, *args, **kwargs):
     "stdout" or "stderr", there is an assumption that the value will
     be an robject(OriginalFileI())
 
+    Providing your own client is possible via the kwarg "client = ...",
+    but be careful since this may break usage with the rest of the
+    scripting framework. The client should not have a session, and
+    must be configured for the argumentless version of createSession()
     """
+
     # Checking kwargs
     if not kwargs.has_key("stdoutFormat"):
         kwargs["stdoutFormat"]="text/plain"
     if not kwargs.has_key("stderrFormat"):
         kwargs["stderrFormat"]="text/plain"
+    if not kwargs.has_key("client"):
+        kwargs["client"] = omero.client()
 
-    c = omero.client()
+    c = kwargs["client"]
     c.params = omero.grid.JobParams()
     c.params.name = name
     c.params.description = description
@@ -123,11 +136,14 @@ def client(name, description = None, *args, **kwargs):
             c.params.inputs[p.name] = param
         if p._out:
             c.params.outputs[p.name] = param
-    if len(c.getProperty("omero.scripts.parse")) > 0: # Add to omero/Constants.ice
-        c.createSession()
+
+    c.createSession().detachOnDestroy()
+    handleParse(c) # May throw
+    return c
+
+def handleParse(c):
+    if len(c.getProperty("omero.scripts.parse")) > 0: # TODO Add to omero/Constants.ice
         c.setOutput("omero.scripts.parse", rinternal(c.params))
-        pysys.exit(0)
-    else:
-        return c
+        raise ParseExit(c.params)
 
 

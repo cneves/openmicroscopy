@@ -10,62 +10,47 @@
 
 -->
 
-  <application name="OMERO" import-default-templates="true">
+  <application name="OMERO">
 
     <!--
       On Windows, absolute paths are required for proper functioning.
       All the necessary paths will use the ${OMERO_HOME} parameter,
       especially in templates.xml
     -->
-    <variable name="OMERO_HOME"   value="c:\\omero_dist"/>
-    <variable name="OMEROPY_HOME" value="${OMERO_HOME}\\lib\\python\\"/>
-    <variable name="PYTHONPATH"   value="PYTHONPATH=%PYTHONPATH%;${OMEROPY_HOME}"/>
+    <variable name="OMERO_HOME"    value="c:\\omero_dist"/>
+    <variable name="OMERO_ETC"     value="${OMERO_HOME}\\etc\\"/>
+    <variable name="OMERO_JARS"    value="${OMERO_HOME}\\lib\\server\\"/>
+    <variable name="OMERO_LOGS"    value="${OMERO_HOME}\\var\\log\\"/>
+    <variable name="OMERO_LOGFILE" value="${OMERO_LOGS}$${omero.name}.log"/>
+    <variable name="OMEROPY_HOME"  value="${OMERO_HOME}\\lib\\python\\"/>
+    <variable name="OMEROPY_SERV"  value="${OMERO_HOME}\\lib\\python\\omero\\"/>
+    <variable name="PYTHONPATH"    value="PYTHONPATH=${OMEROPY_HOME};%PYTHONPATH%"/>
+    <variable name="ROUTERPORT"    value="4063"/>
 
     <properties id="Profile">
       <!--
-      Any properties beginning with "omero" set here will
-      be passed to the servers as if via "-Domero.example=value"
-      were set on the command line. These values may be overwritten
-      by `bin/omero config` values.
+        Properties set here will override all properties defined in templates.xml
+        This can be used to keep all your settings in one place, since templates.xml
+        is more likely to change between releases.
       -->
       <property name="omero.example" value="my_value"/>
     </properties>
 
-    <replica-group id="BlitzAdapters">
-      <load-balancing type="adaptive" load-sample="5" n-replicas="2"/>
-      <object identity="BlitzVerifier" type="::Glacier2::PermissionVerifier"/>
-      <object identity="BlitzManager" type="::Glacier2::SessionManager"/>
-    </replica-group>
-
-    <replica-group id="ProcessorAdapters">
-      <!--load-balancing type="adaptive" load-sample="5" n-replicas="2"/-->
-      <load-balancing type="round-robin"/>
-      <object identity="Processor" type="::omero::grid::Processor"/>
-    </replica-group>
+    <include file="templates.xml"/>
 
     <node name="master">
       <server-instance template="Glacier2Template"
-        client-endpoints="tcp -p 4063"
-        session-timeout="300"
+        client-endpoints="tcp -p ${ROUTERPORT}"
         server-endpoints="tcp -h 127.0.0.1"/>
-      <server-instance template="WinBlitzTemplate" index="0" config="default"/>
-      <server-instance template="WinIndexerTemplate" index="0"/>
+      <server-instance template="BlitzTemplate" index="0" config="default"/>
+      <server-instance template="IndexerTemplate" index="0"/>
       <server-instance template="DropBoxTemplate"/>
       <server-instance template="FSTemplate"/>
       <server-instance template="WebTemplate"/>
       <server-instance template="StormTemplate"/>
-    </node>
-
-    <node name="backup">
-      <server-instance template="BlitzTemplate" index="1" config="backup"/>
-    </node>
-
-    <node name="node1">
-      <server-instance template="ProcessorTemplate" index="1"/>
-    </node>
-
-    <node name="node2">
-      <server-instance template="ProcessorTemplate" index="2"/>
+      <server-instance template="ProcessorTemplate" index="0" dir=""/><!-- assumes legacy -->
+      <server-instance template="TablesTemplate" index="0" dir=""/><!-- assumes legacy -->
+      <server-instance template="TestDropBoxTemplate"/>
     </node>
 
   </application>

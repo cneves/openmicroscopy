@@ -25,12 +25,12 @@ import ome.system.ServiceFactory;
  * {@link Task} writers can override any or all of the 4 methods.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1208 $, $Date: 2007-01-24 16:23:09 +0000 (Wed, 24 Jan 2007) $
  * @see Task
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-01-24 16:23:09 +0000 (Wed, 24 Jan 2007) $")
+@RevisionNumber("$Revision: 1208 $")
 public class SimpleTask extends Task {
 
     /**

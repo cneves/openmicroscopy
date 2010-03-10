@@ -23,7 +23,10 @@
 #
 
 import omero
+
+import omero.rtypes
 from omero.rtypes import *
+
 from omero_model_ExperimenterI import ExperimenterI
 from omero_model_GroupExperimenterMapI import GroupExperimenterMapI
 
@@ -40,10 +43,24 @@ class BaseExperimenters(BaseController):
         self.experimentersList = list(self.conn.lookupExperimenters())
         self.auth = self.conn.lookupLdapAuthExperimenters()
         self.experimenters = list()
+        self.experimentersCount = {'experimenters': 0, 'active': 0, 'ldap': 0, 'admin': 0, 'guest': 0}
         for exp in self.experimentersList:
-            self.experimenters.append({'experimenter': exp, 'active': self.isActive(exp.id), 'ldap':self.isLdap(exp.id),
-                                       'admin': self.isAdmin(exp.id), 'guest': self.isGuest(exp.id)})
-        self.experimentersCount = len(self.experimenters)
+            isActive = self.isActive(exp.id)
+            isLdap = self.isLdap(exp.id)
+            isAdmin = self.isAdmin(exp.id)
+            isGuest = self.isGuest(exp.id)
+            self.experimenters.append({'experimenter': exp, 'active': isActive, 'ldap':isLdap,
+                                       'admin': isAdmin, 'guest':isGuest })
+            if isActive:
+                self.experimentersCount['active'] += 1
+            if isLdap:
+                self.experimentersCount['ldap'] += 1
+            if isAdmin:
+                self.experimentersCount['admin'] += 1
+            if isGuest:
+                self.experimentersCount['guest'] += 1
+        
+        self.experimentersCount['experimenters'] = len(self.experimenters)
     
     def isLdap(self, eid):
         try:
@@ -131,8 +148,8 @@ class BaseExperimenter(BaseController):
         return formGroups
     
     def getMyDetails(self):
-        self.experimenter = self.conn.getExperimenter(self.conn.getUser().id.val)
-        self.ldapAuth = self.conn.lookupLdapAuthExperimenter(self.conn.getUser().id.val)
+        self.experimenter = self.conn._user
+        self.ldapAuth = self.conn.lookupLdapAuthExperimenter(self.conn._userid)
         self.defaultGroup = self.experimenter.copyGroupExperimenterMap()[0].parent.id.val
         self.otherGroups = list()
         for gem in self.experimenter.copyGroupExperimenterMap():
@@ -144,10 +161,10 @@ class BaseExperimenter(BaseController):
     def updateMyAccount(self, firstName, lastName, email, dGroup, middleName=None, institution=None, password=None):
         up_exp = self.experimenter._obj
         up_exp.firstName = rstring(str(firstName))
-        up_exp.middleName = rstring(str(middleName))
+        up_exp.middleName = middleName is not None and rstring(str(middleName)) or None
         up_exp.lastName = rstring(str(lastName))
         up_exp.email = rstring(str(email))
-        up_exp.institution = rstring(str(institution))
+        up_exp.institution = institution is not None and rstring(str(institution)) or None
         
         defaultGroup = self.conn.getGroup(long(dGroup))._obj
         self.conn.updateMyAccount(up_exp, defaultGroup, password)
@@ -168,10 +185,10 @@ class BaseExperimenter(BaseController):
         new_exp = ExperimenterI()
         new_exp.omeName = rstring(str(omeName))
         new_exp.firstName = rstring(str(firstName))
-        new_exp.middleName = rstring(str(middleName))
+        new_exp.middleName = middleName is not None and rstring(str(middleName)) or None
         new_exp.lastName = rstring(str(lastName))
         new_exp.email = rstring(str(email))
-        new_exp.institution = rstring(str(institution))
+        new_exp.institution = institution is not None and rstring(str(institution)) or None
         
         listOfGroups = set()
         # default group
@@ -201,16 +218,16 @@ class BaseExperimenter(BaseController):
                     pass
                 elif long(og) == g.id:
                     listOfGroups.add(g._obj)
-        self.conn.createExperimenter(new_exp, defaultGroup, list(listOfGroups), rstring(str(password)))
+        self.conn.createExperimenter(new_exp, defaultGroup, list(listOfGroups), password)
     
     def updateExperimenter(self, omeName, firstName, lastName, email, admin, active, dGroup, otherGroups, middleName=None, institution=None, password=None):
         up_exp = self.experimenter._obj
         up_exp.omeName = rstring(str(omeName))
         up_exp.firstName = rstring(str(firstName))
-        up_exp.middleName = rstring(str(middleName))
+        up_exp.middleName = middleName is not None and rstring(str(middleName)) or None
         up_exp.lastName = rstring(str(lastName))
         up_exp.email = rstring(str(email))
-        up_exp.institution = rstring(str(institution))
+        up_exp.institution = institution is not None and rstring(str(institution)) or None
         
         # old list of groups
         old_groups = list()
@@ -269,16 +286,8 @@ class BaseExperimenter(BaseController):
                     flag = True
             if not flag:
                 add_grs.append(ngr)
-                
-        #print
-        '''print "add"
-        for g in add_grs:
-            print g.id.val, g.name.val
-        print "remove" 
-        for g in rm_grs:
-            print g.id.val, g.name.val'''
         
-        self.conn.updateExperimenter(up_exp, defaultGroup, add_grs, rm_grs, rstring(str(password)))
+        self.conn.updateExperimenter(up_exp, defaultGroup, add_grs, rm_grs, password)
     
     def deleteExperimenter(self):
         self.conn.deleteExperimenter(self.experimenter._obj)

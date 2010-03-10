@@ -26,7 +26,7 @@ import ome.tools.hibernate.ExtendedMetadata;
  * service level 2
  * 
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 3303 $ $Date: 2009-01-15 14:53:43 +0000 (Thu, 15 Jan 2009) $) </small>
  * @since OMERO 3.0
  */
 public abstract class AbstractLevel2Service implements SelfConfigurableService {

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: UseSecurityTest.java 2425 2008-05-27 14:11:41Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

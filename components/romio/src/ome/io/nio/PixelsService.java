@@ -24,7 +24,7 @@ import ome.model.enums.PixelsType;
  * @author <br>
  *         Chris Allan&nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:callan@blackcat.ca">callan@blackcat.ca</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 5709 $ $Date: 2009-11-13 14:39:15 +0000 (Fri, 13 Nov 2009) $) </small>
  * @since OMERO-Beta1.0
  */
 public class PixelsService extends AbstractFileSystemService {
@@ -151,6 +151,8 @@ public class PixelsService extends AbstractFileSystemService {
 			return 32;
 		} else if (type.getValue().equals("double")) {
 			return 64;
+		} else if (type.getValue().equals("bit")) {
+			return 1;
 		}
 
 		throw new RuntimeException("Pixels type '" + type.getValue()

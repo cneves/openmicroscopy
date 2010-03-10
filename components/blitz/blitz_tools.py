@@ -1,28 +1,34 @@
 #
 #   $Id$
+#   $Id$
 #
 #   Copyright 2008 Glencoe Software, Inc. All rights reserved.
 #   Use is subject to license terms supplied in LICENSE.txt
 #
 
-import os, glob, exceptions, subprocess
+import sys, os, glob, exceptions, subprocess
 from SCons.Script.SConscript import *
+from SCons.Script import AddOption, GetOption
 from SCons.SConf import *
+from SCons.Variables import *
 
 #
 # Global Directories
 #
-dir = os.path.abspath( os.path.dirname( __file__ ) )
-top = os.path.abspath( os.path.join( dir, os.path.pardir, os.path.pardir ) )
+cwd = os.path.abspath( os.path.dirname( __file__ ) )
+top = os.path.abspath( os.path.join( cwd, os.path.pardir, os.path.pardir ) )
 slice_directory = os.path.abspath( os.path.join( top, "target", "Ice", "slice" ) )
 blitz_resources = os.path.abspath( os.path.join( top, "components", "blitz", "resources") )
 blitz_generated = os.path.abspath( os.path.join( top, "components", "blitz", "generated") )
 tools_include = os.path.abspath( os.path.join( top, "components", "tools", "target", "include" ) )
 tools_library = os.path.abspath( os.path.join( top, "components", "tools", "target", "lib" ) )
 omerocpp_dir = os.path.abspath( os.path.join( top, "components", "tools", "OmeroCpp") )
+header = os.path.join( blitz_resources, "header.txt" )
+
 # Relative
 resources = os.path.abspath("resources")
 generated = os.path.abspath("generated")
+
 # Support ICE_HOME
 if os.environ.has_key("ICE_HOME"):
     ice_home = os.path.abspath( os.environ["ICE_HOME"] )
@@ -73,6 +79,9 @@ def make_slice(command):
 
 def slice_cpp(env, where, dir):
     command = ["slice2cpp", "--include-dir=%s"%dir] + common( "%s/%s" % (generated, dir) )
+    if sys.platform == "win32":
+        command.append("--dll-export")
+        command.append("OMERO_API")
     actions = []
     for basename, filename in basenames(where, dir):
         c = env.Command(
@@ -124,60 +133,217 @@ class OmeroEnvironment(SConsEnvironment):
     """
 
     def __init__(self, **kwargs):
-        SConsEnvironment.__init__(self, **kwargs)
+        try:
+            tools = list(kwargs.pop("tools"))
+            tools.append('packaging')
+        except KeyError:
+            tools = ['default', 'packaging']
+
+        AddOption('--release',
+                  dest='release',
+                  type='string',
+                  nargs=1,
+                  action='store',
+                  metavar='RELEASE',
+                  help='Release version [debug (default) or Os]')
+
+        AddOption('--arch',
+                  dest='arch',
+                  type='string',
+                  nargs=1,
+                  action='store',
+                  metavar='ARCH',
+                  help='Architecture to build for [x86, x64, or detect (default)]')
+
+        # Very odd error: using ENV = os.environ, rather than ENV = dict(os.environ)
+        # causes *sub*processes to receive a fresh environment with registry values
+        # for PATH, LIB, etc. *pre*pended to the variables.
+        SConsEnvironment.__init__(self, ENV = dict(os.environ), tools=tools, **kwargs)
         self.Decider('MD5-timestamp')
-        self["ENV"] = os.environ
-        win32 = self["PLATFORM"] == "win32"
+
         # Print statements
         if not os.environ.has_key("VERBOSE"):
             self.Replace(CXXCOMSTR  = "Compiling $TARGET")
             self.Replace(LINKCOMSTR = "Linking   $TARGET")
             self.Replace(SHCXXCOMSTR  = "Compiling $TARGET")
             self.Replace(SHLINKCOMSTR = "Linking   $TARGET")
+
+        # CXX
+        if os.environ.has_key("CXX"):
+            self.Replace(CXX = os.environ["CXX"])
+
         # CXXFLAGS
-        self.Append(CPPFLAGS="-D_REENTRANT")
-        if os.environ.has_key("CXXFLAGS"):
-            self.Append(CPPFLAGS=self.Split(os.environ["CXXFLAGS"]))
+        self.AppendUnique(CPPDEFINES=["OMERO_API_EXPORTS","_REENTRANT"])
+        if self.isdebug():
+            self.AppendUnique(CPPDEFINES=["DEBUG"])
         else:
-            if not win32:
-                self.Append(CPPFLAGS=self.Split("-O0 -g -Wall"))
-                self.Append(CPPFLAGS=self.Split("-ansi"))
-                # self.Append(CPPFLAGS=self.Split("-pedantic -ansi")) Ice fails pedantic due to extra ";"
-                self.Append(CPPFLAGS=self.Split("-Wno-long-long -Wnon-virtual-dtor"))
-                # self.Append(CPPFLAGS=self.Split("-Wno-long-long -Wctor-dtor-privacy -Wnon-virtual-dtor")) Ice fails the ctor check.
-                self.Append(CPPFLAGS=self.Split("-Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wunused-value -Werror"))
-	    else:
-                if self["CC"] == "cl":
-                    self.Append(CPPFLAGS=self.Split("/MD"))
+            self.AppendUnique(CPPDEFINES=["NDEBUG"])
+
+        if not self.iswin32():
+            self.Append(CPPFLAGS=self.Split("-Wall -ansi"))
+            # self.Append(CPPFLAGS=self.Split("-pedantic -ansi")) Ice fails pedantic due to extra ";"
+            self.Append(CPPFLAGS=self.Split("-Wno-long-long -Wnon-virtual-dtor"))
+            # self.Append(CPPFLAGS=self.Split("-Wno-long-long -Wctor-dtor-privacy -Wnon-virtual-dtor")) Ice fails the ctor check.
+            self.Append(CPPFLAGS=self.Split("-Wno-unused-parameter -Wno-unused-function -Wunused-variable -Wunused-value -Werror"))
+            if self.isdebug():
+                self.Append(CPPFLAGS=self.Split("-O0 -g"))
+            else:
+                self.Append(CPPFLAGS=self.Split("-Os"))
+
+        else:
+            self.AppendUnique(CPPDEFINES=["WIN32_LEAN_AND_MEAN"])
+            if self["CC"] == "cl":
+                self.AppendUnique(CPPFLAGS=self.Split("/bigobj"))
+                self.AppendUnique(CPPFLAGS=self.Split("/EHsc"))
+                if self.isdebug():
+                    self.Append(CXXFLAGS=["/Zi","/Od"])
+                    self.AppendUnique(CPPFLAGS = ["/MDd"])
+                else:
+                    self.Append(CXXFLAGS=["/Os"])
+                    self.AppendUnique(CPPFLAGS = ["/MD"])
+
+
+                # Correcting for registry lookup under WoW64
+                # Though here the PATH adheres to the values set by
+                # vcvarsall etc., in subprocesses it revernts (via
+                # the registry?) to the default values.
+                self['LINK'] = self.which('link')
+                self['AR'] = self.which('lib')
+                self['CC'] = self.which('cl')
+                self['CXX'] = '$CC'
+                # Now CC has a non "cl" value. Can no longer use that check.
+
+        # Now let user override
+        if "CXXFLAGS" in os.environ:
+            self.Append(CPPFLAGS=self.Split(os.environ["CXXFLAGS"]))
+
+        #
+        # LINKFLAGS
+        #
+        if self.iswin32():
+            try:
+                verbosity = int(os.environ.get("VERBOSE",0))
+                if verbosity > 1:
+                    # This is VERY verbose
+                    self.AppendUnique(LINKFLAGS = ["/verbose"])
+            except ValueError:
+                pass
+
+            if self.is64bit():
+                self.Append(ARFLAGS = ['/MACHINE:X64'])
+                self.Append(LINKFLAGS = ['/MACHINE:X64'])
+
+            if self.is64bit():
+                self.Append(LINKFLAGS = ['/DEBUG'])
+
+        # Now let user override
+        if "LINKFLAGS" in os.environ:
+            self.Append(CPPFLAGS=self.Split(os.environ["LINKFLAGS"]))
+
         #
         # CPPPATH
         #
-        self.AppendUnique(CPPPATH=blitz_generated)
-        if ice_home:
-            self.Append(CPPPATH=os.path.join(ice_home, "include"))
+        self.AppendUnique(CPPPATH = [blitz_generated] )
         if os.environ.has_key("CPPPATH"):
             self.AppendUnique(CPPPATH=os.environ["CPPPATH"].split(os.path.pathsep))
-        if win32:
-            if os.path.exists(r"C:\Ice-3.3.0\include"):
-                self.AppendUnique(CPPPATH=["C:\Ice-3.3.0\include"])
-            if os.path.exists(r"C:\Program Files\Microsoft Platform SDK\Include"):
-                self.AppendUnique(CPPPATH=["C:\Program Files\Microsoft Platform SDK\Include"])
-            if os.environ.has_key("INCLUDE"):
-                include = os.environ["INCLUDE"].split(os.path.pathsep)
-                self.AppendUnique(CPPPATH=include)
-        else:
-            if os.path.exists("/opt/local/include"):
-                self.AppendUnique(CPPPATH=["/opt/local/include"])
+        if ice_home:
+            self.Append(CPPPATH = [os.path.join(ice_home, "include")] )
 
         #
         # LIBPATH
         #
         self.AppendUnique(LIBPATH=omerocpp_dir)
-        if ice_home:
-            self.Append(LIBPATH=[os.path.join(ice_home, "lib")])
         if os.environ.has_key("LIBPATH"):
             self.AppendUnique(LIBPATH=os.environ["LIBPATH"].split(os.path.pathsep))
-        if os.path.exists("/opt/local/lib"):
-            self.AppendUnique(LIBPATH=["/opt/local/lib"])
-        if os.path.exists(r"C:\Ice-3.3.0\lib"):
-            self.AppendUnique(LIBPATH=[r"C:\Ice-3.3.0\lib"])
+        if self.iswin32():
+            if "LIB" in os.environ:
+                # Only LIB contains the path to the Windows SDK x64 library when starting
+                # from the VS2008 x64 command line batch.
+                self.AppendUnique(LIBPATH=os.environ["LIB"].split(os.path.pathsep))
+        if ice_home:
+            if self.iswin32() and self.is64bit():
+                self.Append(LIBPATH=[os.path.join(ice_home, "lib", "x64")])
+            self.Append(LIBPATH=[os.path.join(ice_home, "lib")])
+
+    def isdebug(self):
+
+        if hasattr(self, "_isdbg"):
+            return self._isdbg
+
+        RELEASE = GetOption("release")
+        if RELEASE == "Os":
+            self._isdbg = False
+        else:
+            self._isdbg = True
+            if RELEASE not in [None, "debug"]:
+                import warnings
+                warnings.warn("Unknown release value. Using 'debug'")
+
+        print "Debug setting: %s (%s)" % (self._isdbg, RELEASE)
+        return self._isdbg
+
+
+    def iswin32(self):
+
+        if hasattr(self, "_win32"):
+            return self._win32
+
+        self._win32 = self["PLATFORM"] == "win32"
+        return self._win32
+
+    def is64bit(self):
+
+        if hasattr(self, "_bit64"):
+            return self._bit64
+
+        ARCH = GetOption("arch")
+        if ARCH == "x64":
+            self._bit64 = True
+        elif ARCH == "x86":
+            self._bit64 = False
+        else:
+            if ARCH not in [None,"detect"]:
+                import warnings
+                warnings.warn("Unknown arch value. Using 'detect'")
+            if self.iswin32():
+                # Work around for 32bit Windows executables
+                try:
+                    import win32process
+                    self._bit64 = win32process.IsWow64Process()
+                except:
+                    import ctypes, sys
+                    i = ctypes.c_int()
+                    kernel32 = ctypes.windll.kernel32
+                    process = kernel32.GetCurrentProcess()
+                    kernel32.IsWow64Process(process, ctypes.byref(i))
+                    self._bit64 = (i.value != 0)
+            else:
+                import platform
+                self._bit64 = platform.architecture()[0] == "64bit"
+
+        print "64-Bit build: %s (%s)" % (self._bit64, ARCH)
+        return self._bit64
+
+    def icelibs(self):
+        if self.iswin32() and self.isdebug():
+            return ["Iced", "IceUtild", "Glacier2d"]
+        else:
+            return ["Ice", "IceUtil", "Glacier2"]
+
+    def which(self, exe):
+        import which
+        try:
+            rv = file = which.which(exe)
+        except which.WhichError:
+            rv = file = ""
+
+        if file:
+            if self.iswin32():
+                import win32api
+                try:
+                    rv = win32api.GetShortPathName(file)
+                    if not os.path.exists(rv):
+                        rv = file
+                except:
+                    pass
+        return rv

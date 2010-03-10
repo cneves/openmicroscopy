@@ -13,7 +13,8 @@ import subprocess
 
 def build_hudson():
     """
-    Top-level build called by hudson for testing the 
+    Top-level build called by hudson for testing all components,
+    generating documentation, etc.
     """
     #
     # Cleaning to prevent strange hudson errors about
@@ -29,7 +30,7 @@ def build_hudson():
     #
     # Documentation and build reports
     #
-    java_omero("release-javadoc")
+    java_omero("release-docs")
     java_omero("release-findbugs")
     ## java_omero("release-jdepend") ## Doesn't yet work. Running from hudson
 
@@ -37,8 +38,6 @@ def build_hudson():
     # Prepare a distribution
     #
     "rm -f OMERO.server-build*.zip"
-    java_omero(["-f","components/tools/OmeroImporter/build.xml","release-win-zip"])
-    java_omero(["-f","components/tools/OmeroImporter/build.xml","release-osx-zip"])
     java_omero("release-zip")
 
     # Install into the hudson repository
@@ -49,6 +48,8 @@ def build_hudson():
 
 def java_omero(args):
     command = [ find_java() ]
+    p = os.path.join( os.path.curdir, "lib", "log4j-build.xml")
+    command.append("-Dlog4j.configuration=%s" % p)
     command.extend( calculate_memory_args() )
     command.extend(["omero"])
     command.extend(choose_omero_version())
@@ -70,12 +71,21 @@ def choose_omero_version():
     ant. Returned as an array so that an empty value can
     be extended into the build command.
 
-    If BUILD_NUMBER is set, then "-Domero.version=buildBUILD_NUMBER",
+    If OMERO_BULID is set, then "-Domero.version=${omero-version}-${OMERO_BUILD}"
     otherwise nothing.
     """
-    if os.environ.has_key("BUILD_NUMBER"):
-        return [ "-Domero.version=build%s" % os.environ["BUILD_NUMBER"] ]
-    else:
+    try:
+        omero_build = os.environ["OMERO_BUILD"]
+        command = [ find_java(), "omero","-q","version" ]
+        try:
+            p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            omero_version,err = p.communicate()
+            omero_version = omero_version.split()[1]
+            return [ "-Domero.version=%s-%s" % (omero_version, omero_build) ]
+        except:
+            print "Error getting version for OMERO_BUILD=%s" % omero_build
+            print err
+    except KeyError, ke:
         return [] # Use default
 
 def execute(args):

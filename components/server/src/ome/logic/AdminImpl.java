@@ -1,5 +1,5 @@
     /*
- *   $Id$
+ *   $Id: AdminImpl.java 4005 2009-03-11 21:11:56Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

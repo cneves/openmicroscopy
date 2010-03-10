@@ -30,11 +30,11 @@ import ome.model.IObject;
  * reloading the {@link IObject#unload() unloaded} entities.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1167 $, $Date: 2006-12-15 10:39:34 +0000 (Fri, 15 Dec 2006) $
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2006-12-15 10:39:34 +0000 (Fri, 15 Dec 2006) $")
+@RevisionNumber("$Revision: 1167 $")
 public class ReloadingRefreshEventListener implements RefreshEventListener {
 
     private static final long serialVersionUID = 4292680015211981832L;

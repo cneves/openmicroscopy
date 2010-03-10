@@ -32,7 +32,7 @@ import ome.model.enums.PixelsType;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 4421 $ $Date:
  *          2005/06/20 14:12:20 $) </small>
  * @since OME2.2
  */
@@ -108,14 +108,14 @@ public class Quantization_8_16_bit extends QuantumStrategy {
         int range = lutMax - lutMin;
         if (range > 0x10000) 
         {
-            // We want to avoid *huge* memory allocations below so if we
-            // couldn't initialize the value above and our lutMax and lutMin
-            // have been assigned out of range values we want to choke, not
-            // cause the server to throw a java.lang.OutOfMemory exception.
-            // *** Ticket #1353 -- Chris Allan <callan@blackcat.ca> ***
-            throw new IllegalArgumentException(String.format(
-                    "Lookup table of size %d greater than supported size %d",
-                    range, 0x10000));
+        	// We want to avoid *huge* memory allocations below so if we
+        	// couldn't initialize the value above and our lutMax and lutMin
+        	// have been assigned out of range values we want to choke, not
+        	// cause the server to throw a java.lang.OutOfMemory exception.
+        	// *** Ticket #1353 -- Chris Allan <callan@blackcat.ca> ***
+        	throw new IllegalArgumentException(String.format(
+        			"Lookup table of size %d greater than supported size %d",
+        			range, 0x10000));
         }
         LUT = new byte[lutMax-lutMin+1];
     }

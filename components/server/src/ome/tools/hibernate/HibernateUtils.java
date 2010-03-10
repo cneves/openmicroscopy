@@ -44,13 +44,13 @@ import ome.tools.lsid.LsidUtils;
  * a dehydrated Hiberante array.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 3753 $, $Date: 2009-02-24 10:28:20 +0000 (Tue, 24 Feb 2009) $
  * @since 3.0-M3
  * @see <a
  *      href="http://trac.openmicroscopy.org.uk/omero/wiki/ObjectModel">wiki:ObjectModel</a>
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2009-02-24 10:28:20 +0000 (Tue, 24 Feb 2009) $")
+@RevisionNumber("$Revision: 3753 $")
 public abstract class HibernateUtils {
 
     private static Log log = LogFactory.getLog(HibernateUtils.class);

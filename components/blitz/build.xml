@@ -9,7 +9,9 @@
     <property name="main.class" value="ome.services.blitz.Entry"/>
 
         <target name="clean" depends="lifecycle.clean">
-            <delete dir="${basedir}/generated"/>
+            <delete dir ="${basedir}/generated"/>
+            <delete dir="${basedir}/omero"/>
+            <delete file="${basedir}/.sconsign.dblite"/>
         </target>
 
 	<target name="compile" depends="generate,icegen" unless="skip.compile">
@@ -204,11 +206,6 @@
 	</target>
 
 	<target name="dist" depends="package,install" unless="skip.compile"><!-- install for standalone -->
-	  <copy todir="${dist.dir}/etc">
-            <fileset dir="${basedir}/etc" includes="**/*"/>
-	    <fileset dir="${resrc.dir}" includes="*.config"/>
-	    <flattenmapper/>
-	  </copy>
 	  <copy todir="${dist.dir}/include">
 	    <fileset dir="${resrc.dir}"  includes="**/*.ice,**/*.h"/>
 	    <fileset dir="${resrc.dest}" includes="**/*.ice,**/*.h"/>

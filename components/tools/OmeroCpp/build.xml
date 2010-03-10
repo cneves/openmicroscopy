@@ -25,21 +25,35 @@
         </scons_py>
     </target>
 
+    <target name="msproj" unless="env.NOMAKE" description="Generate a Visual Studio Project (Windows only)">
+        <scons_py>
+            <arg value="msproj"/>
+        </scons_py>
+    </target>
+
     <target name="test-compile" unless="env.NOMAKE">
         <scons_py>
             <arg value="test"/>
         </scons_py>
+        <available file="test/unit.exe" property="unit.exe-exists"/>
+        <available file="test/integration.exe" property="integration.exe-exists"/>
     </target>
 
-    <target name="test" depends="test-compile" unless="env.NOMAKE">
-        <exec dir="${basedir}" executable="test/unit.exe" failonerror="${test.with.fail}">
+    <target name="test" depends="test-compile" if="unit.exe-exists" unless="env.NOMAKE">
+        <!-- http://forums.sun.com/thread.jspa?threadID=416069 -->
+        <exec dir="${basedir}" executable="${basedir}/test/unit.exe" failonerror="${test.with.fail}">
             <env key="ICE_HOME" value="${ice.home}"/>
+	    <env key="LD_LIBRARY_PATH" value="${env.LD_LIBRARY_PATH}:${basedir}"/>
+	    <env key="DYLD_LIBRARY_PATH" value="${env.DYLD_LIBRARY_PATH}:${basedir}"/>
         </exec>
     </target>
 
-    <target name="integration" depends="test-compile" unless="env.NOMAKE">
-        <exec dir="${basedir}" executable="test/integration.exe" failonerror="${test.with.fail}">
+    <target name="integration" depends="test-compile" if="integration.exe-exists" unless="env.NOMAKE">
+        <!-- http://forums.sun.com/thread.jspa?threadID=416069 -->
+        <exec dir="${basedir}" executable="${basedir}/test/integration.exe" failonerror="${test.with.fail}">
             <env key="ICE_HOME" value="${ice.home}"/>
+	    <env key="LD_LIBRARY_PATH" value="${env.LD_LIBRARY_PATH}:${basedir}"/>
+	    <env key="DYLD_LIBRARY_PATH" value="${env.DYLD_LIBRARY_PATH}:${basedir}"/>
         </exec>
     </target>
 
@@ -54,6 +68,24 @@
             <fileset dir="src"    includes="**/*.h"/>
             <fileset dir="target" includes="**/*.h"/>
         </copy>
+
+        <property prefix="src" file="${basedir}/compiler.log"/>
+        <property name="src.build" value="OMERO.cpp-src-${omero.version}"/>
+        <zip destfile="${omero.home}/target/${src.build}.zip">
+             <zipfileset dir="${basedir}/src"        prefix="${src.build}"      includes="**/*.cpp,**/*.h"/>
+             <zipfileset dir="${basedir}/target"     prefix="${src.build}"      includes="**/*.cpp,**/*.h"/>
+        </zip>
+
+        <property prefix="compiler" file="${basedir}/compiler.log"/>
+        <property name="compiler.build" value="OMERO.cpp-${omero.version}-${compiler.CXX}-${compiler.CXXVERSION}-${compiler.ARCH}${compiler.RELEASE}"/>
+        <zip destfile="${omero.home}/target/${compiler.build}.zip">
+             <zipfileset dir="${basedir}/src"        prefix="${compiler.build}"      includes="**/*.cpp,**/*.h"/>
+             <zipfileset dir="${basedir}/target"     prefix="${compiler.build}"      includes="**/*.cpp,**/*.h"/>
+             <zipfileset dir="${basedir}/target/lib" prefix="${compiler.build}"      includes="*omero_client*"/>
+             <zipfileset dir="${basedir}/"           prefix="${compiler.build}"      includes="*.pdb"/>
+             <zipfileset dir="${basedir}/"           prefix="${compiler.build}/logs" includes="*.log"/>
+        </zip>
+
     </target>
 
    <target name="tools-clean">
@@ -61,6 +93,9 @@
             <arg value="-c"/>
         </scons_py>
         <delete dir="${copy.dir}"/>
+        <delete dir="${basedir}/.sconf_temp"/>
+        <delete file="${basedir}/.sconsign.dblite"/>
+        <delete file="${basedir}/*.log"/>
     </target>
 
     <!-- Temporary: this will be moved to scons.xml -->

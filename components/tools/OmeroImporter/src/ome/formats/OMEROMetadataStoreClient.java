@@ -1,18 +1,30 @@
 package ome.formats;
 
+import static omero.rtypes.rbool;
+import static omero.rtypes.rdouble;
+import static omero.rtypes.rint;
+import static omero.rtypes.rlong;
+import static omero.rtypes.rstring;
+import static omero.rtypes.rtime;
+
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.sql.Timestamp;
 import java.text.Collator;
 import java.text.ParseException;
 import java.text.RuleBasedCollator;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -22,26 +34,27 @@ import java.util.TreeMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
-import Glacier2.CannotCreateSessionException;
-import Glacier2.PermissionDeniedException;
-
-import static omero.rtypes.*;
+import loci.formats.IFormatReader;
+import loci.formats.ImageReader;
+import loci.formats.meta.IMinMaxStore;
+import loci.formats.meta.MetadataStore;
 import ome.formats.enums.EnumerationProvider;
 import ome.formats.enums.IQueryEnumProvider;
-import ome.formats.importer.MetaLightSource;
 import ome.formats.importer.util.ClientKeepAlive;
 import ome.formats.model.BlitzInstanceProvider;
 import ome.formats.model.ChannelProcessor;
 import ome.formats.model.IObjectContainerStore;
-import ome.formats.model.InstrumentProcessor;
-import ome.formats.model.PixelsProcessor;
 import ome.formats.model.InstanceProvider;
+import ome.formats.model.InstrumentProcessor;
+import ome.formats.model.MetaLightSource;
+import ome.formats.model.MetaShape;
 import ome.formats.model.ModelProcessor;
+import ome.formats.model.PixelsProcessor;
+import ome.formats.model.PlaneInfoProcessor;
 import ome.formats.model.ReferenceProcessor;
+import ome.formats.model.ShapeProcessor;
 import ome.formats.model.TargetProcessor;
+import ome.formats.model.WellProcessor;
 import ome.util.LSID;
 import omero.RBool;
 import omero.RDouble;
@@ -54,7 +67,9 @@ import omero.client;
 import omero.api.IAdminPrx;
 import omero.api.IContainerPrx;
 import omero.api.IQueryPrx;
+import omero.api.IRenderingSettingsPrx;
 import omero.api.IRepositoryInfoPrx;
+import omero.api.ITypesPrx;
 import omero.api.IUpdatePrx;
 import omero.api.MetadataStorePrx;
 import omero.api.MetadataStorePrxHelper;
@@ -62,7 +77,9 @@ import omero.api.RawFileStorePrx;
 import omero.api.RawPixelsStorePrx;
 import omero.api.ServiceFactoryPrx;
 import omero.api.ServiceInterfacePrx;
+import omero.api.ThumbnailStorePrx;
 import omero.constants.METADATASTORE;
+import omero.grid.InteractiveProcessorPrx;
 import omero.metadatastore.IObjectContainer;
 import omero.model.AcquisitionMode;
 import omero.model.Arc;
@@ -75,11 +92,17 @@ import omero.model.DatasetI;
 import omero.model.Detector;
 import omero.model.DetectorSettings;
 import omero.model.DetectorType;
+import omero.model.Dichroic;
 import omero.model.DimensionOrder;
+import omero.model.Ellipse;
 import omero.model.Experiment;
 import omero.model.ExperimentType;
 import omero.model.Filament;
 import omero.model.FilamentType;
+import omero.model.FileAnnotation;
+import omero.model.Filter;
+import omero.model.FilterSet;
+import omero.model.FilterType;
 import omero.model.Format;
 import omero.model.IObject;
 import omero.model.Illumination;
@@ -87,39 +110,55 @@ import omero.model.Image;
 import omero.model.ImageI;
 import omero.model.ImagingEnvironment;
 import omero.model.Immersion;
+import omero.model.ImmersionI;
 import omero.model.Instrument;
 import omero.model.Laser;
 import omero.model.LaserMedium;
 import omero.model.LaserType;
 import omero.model.LightSettings;
 import omero.model.LightSource;
+import omero.model.Line;
 import omero.model.LogicalChannel;
+import omero.model.Mask;
 import omero.model.Medium;
+import omero.model.Microscope;
+import omero.model.MicroscopeI;
+import omero.model.MicroscopeType;
 import omero.model.OTF;
 import omero.model.Objective;
 import omero.model.ObjectiveSettings;
 import omero.model.OriginalFile;
+import omero.model.Path;
 import omero.model.PhotometricInterpretation;
 import omero.model.Pixels;
 import omero.model.PixelsType;
 import omero.model.PlaneInfo;
 import omero.model.Plate;
-import omero.model.ProjectI;
+import omero.model.Point;
+import omero.model.Polygon;
 import omero.model.Project;
+import omero.model.ProjectI;
 import omero.model.Pulse;
 import omero.model.Reagent;
+import omero.model.Rect;
 import omero.model.Screen;
 import omero.model.ScreenAcquisition;
 import omero.model.ScreenI;
+import omero.model.Shape;
 import omero.model.StageLabel;
+import omero.model.Text;
+import omero.model.TransmittanceRange;
+import omero.model.TransmittanceRangeI;
 import omero.model.Well;
 import omero.model.WellSample;
+import omero.sys.ParametersI;
+import omero.util.TempFileManager;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
-import loci.formats.IFormatReader;
-import loci.formats.ImageReader;
-import loci.formats.meta.IMinMaxStore;
-import loci.formats.meta.MetadataStore;
+import Glacier2.CannotCreateSessionException;
+import Glacier2.PermissionDeniedException;
 
 
 /**
@@ -130,29 +169,35 @@ import loci.formats.meta.MetadataStore;
  * @author Chris Allan, callan at lifesci.dundee.ac.uk
  */
 public class OMEROMetadataStoreClient
-	implements MetadataStore, IMinMaxStore, IObjectContainerStore
+    implements MetadataStore, IMinMaxStore, IObjectContainerStore
 {
-	/** Logger for this class */
-	private Log log = LogFactory.getLog(OMEROMetadataStoreClient.class);
-	
+    /** Logger for this class */
+    private Log log = LogFactory.getLog(OMEROMetadataStoreClient.class);
+    
     private MetadataStorePrx delegate;
     
     /** Our IObject container cache. */
     private Map<LSID, IObjectContainer> containerCache = 
-    	new TreeMap<LSID, IObjectContainer>(new OMEXMLModelComparator());
+        new TreeMap<LSID, IObjectContainer>(new OMEXMLModelComparator());
     
     /** Our LSID reference cache. */
-    private Map<LSID, LSID> referenceCache = new HashMap<LSID, LSID>();
+    private Map<LSID, List<LSID>> referenceCache = 
+    	new HashMap<LSID, List<LSID>>();
+    
+    /** Our authoritative LSID container cache. */
+    private Map<Class<? extends IObject>, Map<String, IObjectContainer>>
+    	authoritativeContainerCache = 
+    		new HashMap<Class<? extends IObject>, Map<String, IObjectContainer>>();
     
     /** 
      * Our string based reference cache. This will be populated after all
      * model population has been completed by a ReferenceProcessor. 
      */
-    private Map<String, String> referenceStringCache;
+    private Map<String, String[]> referenceStringCache;
 
     /** Our model processors. Will be called on saveToDB(). */
     private List<ModelProcessor> modelProcessors = 
-    	new ArrayList<ModelProcessor>();
+        new ArrayList<ModelProcessor>();
     
     /** Bio-Formats reader that's populating us. */
     private IFormatReader reader;
@@ -168,6 +213,8 @@ public class OMEROMetadataStoreClient
     private RawPixelsStorePrx rawPixelStore;
     private IRepositoryInfoPrx iRepoInfo;
     private IContainerPrx iContainer;
+    private IRenderingSettingsPrx iSettings;
+    private ThumbnailStorePrx thumbnailStore;
     
     /** Our enumeration provider. */
     private EnumerationProvider enumProvider;
@@ -198,32 +245,55 @@ public class OMEROMetadataStoreClient
     
     /** Executor that will run our keep alive task. */
     private ScheduledThreadPoolExecutor executor;
+    
+    /** Emission filter LSID suffix. */
+    public static final String OMERO_EMISSION_FILTER_SUFFIX =
+    	":OMERO_EMISSION_FILTER";
+    
+    /** Excitation filter LSID suffix. */
+    public static final String OMERO_EXCITATION_FILTER_SUFFIX =
+    	":OMERO_EXCITATION_FILTER";
+    
+    /** Companion file namespace */
+    private static final String NS_COMPANION =
+    	"openmicroscopy.org/omero/import/companionFile";
+    
+    /** The default longest side of a thumbnail in OMERO.insight. */
+    private static final int DEFAULT_INSIGHT_THUMBNAIL_LONGEST_SIDE = 96;
 
     private void initializeServices()
-    	throws ServerError
+        throws ServerError
     {
-    	// Blitz services
-    	iUpdate = serviceFactory.getUpdateService();
-    	iQuery = serviceFactory.getQueryService();
-    	iAdmin = serviceFactory.getAdminService();
-    	rawFileStore = serviceFactory.createRawFileStore();
-    	rawPixelStore = serviceFactory.createRawPixelsStore();
-    	iRepoInfo = serviceFactory.getRepositoryInfoService();
-    	iContainer = serviceFactory.getContainerService();
-    	delegate = MetadataStorePrxHelper.checkedCast(serviceFactory.getByName(METADATASTORE.value));
+        // Blitz services
+        iUpdate = serviceFactory.getUpdateService();
+        iQuery = serviceFactory.getQueryService();
+        iAdmin = serviceFactory.getAdminService();
+        rawFileStore = serviceFactory.createRawFileStore();
+        rawPixelStore = serviceFactory.createRawPixelsStore();
+        thumbnailStore = serviceFactory.createThumbnailStore();
+        iRepoInfo = serviceFactory.getRepositoryInfoService();
+        iContainer = serviceFactory.getContainerService();
+        iSettings = serviceFactory.getRenderingSettingsService();
+        delegate = MetadataStorePrxHelper.checkedCast(serviceFactory.getByName(METADATASTORE.value));
 
-    	// Client side services
-    	enumProvider = new IQueryEnumProvider(iQuery);
-    	instanceProvider = new BlitzInstanceProvider(enumProvider);
-    	
-    	// Default model processors
+        // Client side services
+        enumProvider = new IQueryEnumProvider(iQuery);
+        instanceProvider = new BlitzInstanceProvider(enumProvider);
+        
+        // Default model processors
         modelProcessors.add(new PixelsProcessor());
-    	modelProcessors.add(new ChannelProcessor());
-    	modelProcessors.add(new InstrumentProcessor());
-    	modelProcessors.add(new TargetProcessor());
-    	modelProcessors.add(new ReferenceProcessor());
-    	
-    	// Start our keep alive executor
+        modelProcessors.add(new ChannelProcessor());
+        modelProcessors.add(new InstrumentProcessor());
+        modelProcessors.add(new PlaneInfoProcessor());
+        modelProcessors.add(new WellProcessor());
+        modelProcessors.add(new ShapeProcessor());
+        modelProcessors.add(new TargetProcessor());  // Should be second last
+        modelProcessors.add(new ReferenceProcessor());  // Should be last
+        
+        // Fix check for broken 4.0 immersions table
+        //checkImmersions();
+        
+        // Start our keep alive executor
         if (executor == null)
         {
             executor = new ScheduledThreadPoolExecutor(1);
@@ -243,12 +313,12 @@ public class OMEROMetadataStoreClient
      * @param serviceFactory The factory. Mustn't be <code>null</code>.
      */
     public void initialize(ServiceFactoryPrx serviceFactory)
-    	throws ServerError
+        throws ServerError
     {
-    	if (serviceFactory == null)
-    		throw new IllegalArgumentException("No factory.");
-    	this.serviceFactory = serviceFactory;
-    	initializeServices();
+        if (serviceFactory == null)
+            throw new IllegalArgumentException("No factory.");
+        this.serviceFactory = serviceFactory;
+        initializeServices();
     }
     
     /**
@@ -287,6 +357,15 @@ public class OMEROMetadataStoreClient
         serviceFactory = c.joinSession(sessionKey);
         initializeServices();
     }
+    
+    /**
+     * Returns the currently active service factory.
+     * @return See above.
+     */
+    public ServiceFactoryPrx getServiceFactory()
+    {
+    	return serviceFactory;
+    }
 
     /**
      * Pings all registered OMERO Blitz proxies. 
@@ -295,8 +374,8 @@ public class OMEROMetadataStoreClient
     public void ping()
     {
         serviceFactory.keepAllAlive(new ServiceInterfacePrx[] 
-                {iQuery, iAdmin, rawFileStore, rawPixelStore, iRepoInfo,
-                 iContainer, iUpdate, delegate});
+                {iQuery, iAdmin, rawFileStore, rawPixelStore, thumbnailStore,
+        		 iRepoInfo, iContainer, iUpdate, iSettings, delegate});
         log.debug("KeepAlive ping");
     }
     
@@ -384,14 +463,17 @@ public class OMEROMetadataStoreClient
     {
         if (executor != null)
         {
-            log.debug("Logout called, keep alive shut down.");
+            log.debug("Logout called, shutting keep alive down.");
             executor.shutdown();
             executor = null;
+            log.debug("keepalive shut down.");
         }
         if (c != null)
         {
+            log.debug("closing client session.");
             c.closeSession();
             c = null;
+            log.debug("client closed.");
         }
 
     }
@@ -404,9 +486,11 @@ public class OMEROMetadataStoreClient
         try
         {
             log.debug("Creating root!");
+            authoritativeContainerCache = 
+            	new HashMap<Class<? extends IObject>, Map<String, IObjectContainer>>();
             containerCache = 
                 new TreeMap<LSID, IObjectContainer>(new OMEXMLModelComparator());
-            referenceCache = new HashMap<LSID, LSID>();
+            referenceCache = new HashMap<LSID, List<LSID>>();
             referenceStringCache = null;
             imageChannelGlobalMinMax = null;
             userSpecifiedImageName = null;
@@ -426,7 +510,7 @@ public class OMEROMetadataStoreClient
      */
     public Object getRoot()
     {
-    	return pixelsList;
+        return pixelsList;
     }
 
     /**
@@ -440,12 +524,45 @@ public class OMEROMetadataStoreClient
         return enumProvider.getEnumeration(klass, value, false);
     }
     
+    /**
+     * Checks for duplicate authoritative LSIDs for a given class in the 
+     * container cache.
+     * @param klass Filter class for IObjectContainer types.
+     * @param lsid LSID to check against.
+     */
+    private void checkDuplicateLSID(Class<? extends IObject> klass, String lsid)
+    {
+    	if (log.isTraceEnabled())
+    	{
+    		List<IObjectContainer> containers = getIObjectContainers(klass);
+    		for (IObjectContainer container : containers)
+    		{
+    			if (container.LSID.equals(lsid))
+    			{
+    				log.trace(String.format("Duplicate LSID %s exists in %s,%s",
+    						lsid, container.sourceObject, container.LSID));
+    					return;
+    			}
+    		}
+    	}
+    }
+    
     /* (non-Javadoc)
      * @see ome.formats.model.IObjectContainerStore#getReader()
      */
     public IFormatReader getReader()
     {
-    	return reader;
+        return reader;
+    }
+    
+    
+    public String getReaderType()
+    {
+        ImageReader imageReader = (ImageReader) reader;
+        String formatString = imageReader.getReader().getClass().toString();
+        formatString = formatString.replace("class loci.formats.in.", "");
+        formatString = formatString.replace("Reader", "");
+        return formatString;
     }
     
     /* (non-Javadoc)
@@ -453,7 +570,7 @@ public class OMEROMetadataStoreClient
      */
     public void setReader(IFormatReader reader)
     {
-    	this.reader = reader;
+        this.reader = reader;
     }
 
     /* (non-Javadoc)
@@ -509,18 +626,18 @@ public class OMEROMetadataStoreClient
      */
     public Double[] getUserSpecifiedPhysicalPixelSizes()
     {
-    	return userSpecifiedPhysicalPixelSizes;
+        return userSpecifiedPhysicalPixelSizes;
     }
     
     /* (non-Javadoc)
      * @see ome.formats.model.IObjectContainerStore#setUserSpecifiedPhysicalPixelSizes(java.lang.Double, java.lang.Double, java.lang.Double)
      */
     public void setUserSpecifiedPhysicalPixelSizes(Double physicalSizeX,
-    		                                       Double physicalSizeY,
-    		                                       Double physicalSizeZ)
+                                                   Double physicalSizeY,
+                                                   Double physicalSizeZ)
     {
-    	userSpecifiedPhysicalPixelSizes = 
-    		new Double[] { physicalSizeX, physicalSizeY, physicalSizeZ };
+        userSpecifiedPhysicalPixelSizes = 
+            new Double[] { physicalSizeX, physicalSizeY, physicalSizeZ };
     }
     
     /**
@@ -530,7 +647,7 @@ public class OMEROMetadataStoreClient
      */
     public List<ModelProcessor> getModelProcessors()
     {
-    	return modelProcessors;
+        return modelProcessors;
     }
     
     /**
@@ -539,7 +656,7 @@ public class OMEROMetadataStoreClient
      */
     public void setModelProcessors(List<ModelProcessor> modelProcessors)
     {
-    	this.modelProcessors = modelProcessors;
+        this.modelProcessors = modelProcessors;
     }
     
     /**
@@ -548,7 +665,7 @@ public class OMEROMetadataStoreClient
      */
     public void removeModelProcessor(ModelProcessor processor)
     {
-    	modelProcessors.remove(processor);
+        modelProcessors.remove(processor);
     }
     
     /**
@@ -558,7 +675,7 @@ public class OMEROMetadataStoreClient
      */
     public boolean addModelProcessor(ModelProcessor processor)
     {
-    	return modelProcessors.add(processor);
+        return modelProcessors.add(processor);
     }
 
     /* (non-Javadoc)
@@ -566,31 +683,80 @@ public class OMEROMetadataStoreClient
      */
     public Map<LSID, IObjectContainer> getContainerCache()
     {
-    	return containerCache;
+        return containerCache;
     }
     
     /* (non-Javadoc)
      * @see ome.formats.model.IObjectContainerStore#getReferenceCache()
      */
-    public Map<LSID, LSID> getReferenceCache()
+    public Map<LSID, List<LSID>> getReferenceCache()
     {
-    	return referenceCache;
+        return referenceCache;
+    }
+    
+    /* (non-Javadoc)
+     * @see ome.formats.model.IObjectContainerStore#getAuthoritativeContainerCache()
+     */
+    public Map<Class<? extends IObject>, Map<String, IObjectContainer>>
+    	getAuthoritativeContainerCache()
+    {
+    	return authoritativeContainerCache;
+    }
+    
+    /**
+     * Adds a container to the authoritative LSID cache.
+     * @param klass Type of container we're adding.
+     * @param lsid String LSID of the container.
+     * @param container Container to add.
+     */
+    private void addAuthoritativeContainer(Class<? extends IObject> klass,
+    		                               String lsid,
+    		                               IObjectContainer container)
+    {
+    	Map<String, IObjectContainer> lsidContainerMap =
+    		authoritativeContainerCache.get(klass);
+    	if (lsidContainerMap == null)
+    	{
+    		lsidContainerMap = new HashMap<String, IObjectContainer>(); 
+    		authoritativeContainerCache.put(klass, lsidContainerMap);
+    	}
+    	lsidContainerMap.put(lsid, container);
+    }
+    
+    /**
+     * Adds a reference to the reference cache.
+     * @param source Source LSID to add.
+     * @param target Target LSID to add.
+     */
+    public void addReference(LSID source, LSID target)
+    {
+    	List<LSID> targets = null;
+    	if (referenceCache.containsKey(source))
+    	{
+    		targets = referenceCache.get(source);
+    	}
+    	else
+    	{
+    		targets = new ArrayList<LSID>();
+    		referenceCache.put(source, targets);
+    	}
+    	targets.add(target);
     }
     
     /* (non-Javadoc)
      * @see ome.formats.model.IObjectContainerStore#getReferenceStringCache()
      */
-    public Map<String, String> getReferenceStringCache()
+    public Map<String, String[]> getReferenceStringCache()
     {
-    	return referenceStringCache;
+        return referenceStringCache;
     }
     
     /* (non-Javadoc)
-     * @see ome.formats.model.IObjectContainerStore#setReferenceStringCache(java.util.Map)
+     * @see ome.formats.model.IObjectContainerStore#setReferenceStringCache(Map<String, String[]>)
      */
-    public void setReferenceStringCache(Map<String, String> referenceStringCache)
+    public void setReferenceStringCache(Map<String, String[]> referenceStringCache)
     {
-    	this.referenceStringCache = referenceStringCache;
+        this.referenceStringCache = referenceStringCache;
     }
     
     /**
@@ -624,12 +790,12 @@ public class OMEROMetadataStoreClient
     public <T extends IObject> List<T> getSourceObjects(Class<T> klass)
     {
         List<IObjectContainer> containers = getIObjectContainers(klass);
-    	List<T> toReturn = new ArrayList<T>(containers.size());
-    	for (IObjectContainer container: containers)
-    	{
-    	    toReturn.add((T) container.sourceObject);
-    	}
-    	return toReturn;
+        List<T> toReturn = new ArrayList<T>(containers.size());
+        for (IObjectContainer container: containers)
+        {
+            toReturn.add((T) container.sourceObject);
+        }
+        return toReturn;
     }
     
     /* (non-Javadoc)
@@ -638,31 +804,104 @@ public class OMEROMetadataStoreClient
     public boolean hasReference(LSID source, LSID target)
     {
         if (!referenceCache.containsKey(source)
-            || !referenceCache.containsValue(target))
+            || !referenceCache.get(source).contains(target))
         {
             return false;
         }
         return true;
     }
     
+    /**
+     * Handles the upcast to the "real" concrete type and the correct LSID
+     * mapping if required.
+     * @param klass Class to retrieve a container for.
+     * @param indexes Indexes into the OME-XML data model.
+     * @param lsid LSID of the container.
+     * @return Created container or <code>null</code> if the container cache
+     * already contains <code>lsid</code>.
+     */
+    private IObjectContainer handleAbstractLightSource(
+    		Class<? extends IObject> klass,
+    		LinkedHashMap<String, Integer> indexes, LSID lsid)
+    {
+        LSID lsLSID = new LSID(LightSource.class,
+                               indexes.get("instrumentIndex"),
+                               indexes.get("lightSourceIndex"));
+        if (containerCache.containsKey(lsLSID))
+        {
+            IObjectContainer container = containerCache.get(lsLSID);
+            MetaLightSource mls = 
+                (MetaLightSource) container.sourceObject;
+            LightSource realInstance = 
+                (LightSource) getSourceObjectInstance(klass);
+            mls.copyData(realInstance);
+            container.sourceObject = realInstance;
+            if (container.LSID == null
+                || container.LSID.equals(lsLSID.toString()))
+            {
+                container.LSID = lsid.toString();
+            }
+            containerCache.put(lsid, container);
+            return container;
+        }
+        return null;
+    }
+    
+    /**
+     * Handles the upcast to the "real" concrete type and the correct LSID
+     * mapping if required.
+     * @param klass Class to retrieve a container for.
+     * @param indexes Indexes into the OME-XML data model.
+     * @param lsid LSID of the container.
+     * @return Created container or <code>null</code> if the container cache
+     * already does not contain <code>lsid</code>.
+     */
+    private IObjectContainer handleAbstractShape(
+    		Class<? extends IObject> klass,
+    		LinkedHashMap<String, Integer> indexes, LSID lsid)
+    {
+        LSID shapeLSID = new LSID(Shape.class,
+                                  indexes.get("imageIndex"),
+                                  indexes.get("roiIndex"),
+                                  indexes.get("shapeIndex"));
+        if (containerCache.containsKey(shapeLSID))
+        {
+            IObjectContainer container = containerCache.get(shapeLSID);
+            MetaShape metaShape = 
+                (MetaShape) container.sourceObject;
+            Shape realInstance = 
+                (Shape) getSourceObjectInstance(klass);
+            metaShape.copyData(realInstance);
+            container.sourceObject = realInstance;
+            if (container.LSID == null
+                || container.LSID.equals(shapeLSID.toString()))
+            {
+                container.LSID = lsid.toString();
+            }
+            containerCache.put(lsid, container);
+            return container;
+        }
+        return null;
+    }
+    
     /* (non-Javadoc)
      * @see ome.formats.model.IObjectContainerStore#getIObjectContainer(java.lang.Class, java.util.LinkedHashMap)
      */
     public IObjectContainer getIObjectContainer(Class<? extends IObject> klass,
-    		                                    LinkedHashMap<String, Integer> indexes)
+                                                LinkedHashMap<String, Integer> indexes)
     {
-    	// Transform an integer collection into an integer array without using
-    	// wrapper objects.
-    	Collection<Integer> indexValues = indexes.values();
-    	int[] indexesArray = new int[indexValues.size()];
-    	int i = 0;
-    	for (Integer index : indexValues)
-    	{
-    		indexesArray[i] = index;
-    		i++;
-    	}
-    	
-    	// Create a new LSID.
+        // Transform an integer collection into an integer array without using
+        // wrapper objects.
+        Collection<Integer> indexValues = indexes.values();
+        int[] indexesArray = new int[indexValues.size()];
+        int i = 0;
+        for (Integer index : indexValues)
+        {
+            indexesArray[i] = index;
+            i++;
+        }
+        
+        // Create a new LSID.
         LSID lsid = new LSID(klass, indexesArray);
         
         // Because of the LightSource abstract type, here we need to handle
@@ -672,46 +911,67 @@ public class OMEROMetadataStoreClient
             || klass.equals(Filament.class))
             && !containerCache.containsKey(lsid))
         {
-            LSID lsLSID = new LSID(LightSource.class,
-                                   indexes.get("instrumentIndex"),
-                                   indexes.get("lightSourceIndex"));
-            if (containerCache.containsKey(lsLSID))
-            {
-                IObjectContainer container = containerCache.get(lsLSID);
-                MetaLightSource mls = 
-                    (MetaLightSource) container.sourceObject;
-                LightSource realInstance = 
-                    (LightSource) getSourceObjectInstance(klass);
-                mls.copyData(realInstance);
-                container.sourceObject = realInstance;
-                if (container.LSID == null
-                    || container.LSID.equals(lsLSID.toString()))
-                {
-                    container.LSID = lsid.toString();
-                }
-                containerCache.put(lsid, container);
-                return container;
-            }
+        	IObjectContainer toReturn = 
+        		handleAbstractLightSource(klass, indexes, lsid);
+        	if (toReturn != null)
+        	{
+        		return toReturn;
+        	}
+        }
+        // Because of the Shape abstract type, here we need to handle
+        // the upcast to the "real" concrete type and the correct LSID
+        // mapping.
+        if ((klass.equals(Text.class) || klass.equals(Rect.class)
+            || klass.equals(Mask.class) || klass.equals(Ellipse.class)
+            || klass.equals(Point.class) || klass.equals(Path.class)
+            || klass.equals(Polygon.class) || klass.equals(Line.class))
+            && !containerCache.containsKey(lsid))
+        {
+        	IObjectContainer toReturn = 
+        		handleAbstractShape(klass, indexes, lsid);
+        	if (toReturn != null)
+        	{
+        		return toReturn;
+        	}
         }
         // We may have first had a concrete method call request, put the object
         // in a container and in the cache. Now we have a request with only the
         // abstract type's class to give us LSID resolution and must handle 
         // that as well.
         if (klass.equals(LightSource.class)
-        	&& !containerCache.containsKey(lsid))
+            && !containerCache.containsKey(lsid))
         {
-        	Class[] concreteClasses = 
-        		new Class[] { Arc.class, Laser.class, Filament.class };
-        	for (Class concreteClass : concreteClasses)
-        	{
+            Class[] concreteClasses = 
+                new Class[] { Arc.class, Laser.class, Filament.class };
+            for (Class concreteClass : concreteClasses)
+            {
                 LSID lsLSID = new LSID(concreteClass,
                                        indexes.get("instrumentIndex"),
                                        indexes.get("lightSourceIndex"));
                 if (containerCache.containsKey(lsLSID))
                 {
-                	return containerCache.get(lsLSID);
+                    return containerCache.get(lsLSID);
                 }
-        	}
+            }
+        }
+        if (klass.equals(Shape.class)
+            && !containerCache.containsKey(lsid))
+        {
+            Class[] concreteClasses = 
+                new Class[] { Text.class, Rect.class, Mask.class, Ellipse.class,
+            		          Point.class, Path.class, Polygon.class,
+            		          Line.class };
+            for (Class concreteClass : concreteClasses)
+            {
+                LSID shapeLSID = new LSID(concreteClass,
+                                          indexes.get("imageIndex"),
+                                          indexes.get("roiIndex"),
+                                          indexes.get("shapeIndex"));
+                if (containerCache.containsKey(shapeLSID))
+                {
+                    return containerCache.get(shapeLSID);
+                }
+            }
         }
         
         if (!containerCache.containsKey(lsid))
@@ -724,6 +984,14 @@ public class OMEROMetadataStoreClient
         }
         
         return containerCache.get(lsid);
+    }
+    
+    /* (non-Javadoc)
+     * @see ome.formats.model.IObjectContainerStore#removeIObjectContainer(ome.util.LSID)
+     */
+    public void removeIObjectContainer(LSID lsid)
+    {
+    	containerCache.remove(lsid);
     }
     
     /* (non-Javadoc)
@@ -752,14 +1020,14 @@ public class OMEROMetadataStoreClient
      */
     private <T extends IObject> T getSourceObjectInstance(Class<T> klass)
     {
-    	return instanceProvider.getInstance(klass);
+        return instanceProvider.getInstance(klass);
     }
         
     /* (non-Javadoc)
      * @see ome.formats.model.IObjectContainerStore#countCachedContainers(java.lang.Class, int[])
      */
     public int countCachedContainers(Class<? extends IObject> klass,
-    		                         int... indexes)
+                                     int... indexes)
     {
         if (klass == null)
         {
@@ -769,21 +1037,34 @@ public class OMEROMetadataStoreClient
         int count = 0;
         for (LSID lsid : containerCache.keySet())
         {
-        	Class<? extends IObject> lsidClass = lsid.getJavaClass();
+            Class<? extends IObject> lsidClass = lsid.getJavaClass();
             if (lsidClass != null && lsidClass.equals(klass))
             {
-            	if (indexes != null)
-            	{
-            		int[] lsidIndexes = lsid.getIndexes();
-            		for (int i = 0; i < indexes.length; i++)
-            		{
-            			if (lsidIndexes[i] != indexes[i])
-            			{
-            				continue;
-            			}
-            		}
-            	}
-                count++;
+                if (indexes == null)
+                {
+                	// We're just doing a class match, increment the count
+                	count++;
+                }
+                else
+                {
+                	// We're doing a class and index match, loop over and
+                	// check the indexes based on the shortest array.
+                    int[] lsidIndexes = lsid.getIndexes();
+                    int n = Math.min(indexes.length, lsidIndexes.length);
+                    boolean match = true;
+                    for (int i = 0; i < n; i++)
+                    {
+                        if (lsidIndexes[i] != indexes[i])
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (match)
+                    {
+                    	count++;
+                    }
+                }
             }
         }
         return count;
@@ -797,7 +1078,12 @@ public class OMEROMetadataStoreClient
     {
         if (source == null && target == null)
         {
-            return referenceCache.size();
+        	int count = 0;
+        	for (LSID key : referenceCache.keySet())
+        	{
+        		count += referenceCache.get(key).size();
+        	}
+        	return count;
         }
         
         int count = 0;
@@ -816,81 +1102,36 @@ public class OMEROMetadataStoreClient
         
         if (source == null)
         {
-            for (LSID lsid : referenceCache.values())
-            {
-                Class containerClass = lsid.getJavaClass();
-                if (containerClass.equals(target))
-                {
-                    count++;
-                }
-            }
+        	for (LSID sourceLSID : referenceCache.keySet())
+        	{
+        		for (LSID targetLSID : referenceCache.get(sourceLSID))
+        		{
+        			Class containerClass = targetLSID.getJavaClass();
+        			if (containerClass.equals(target))
+        			{
+        				count++;
+        			}
+        		}
+        	}
             return count;
         }
         
-        for (LSID lsid : referenceCache.keySet())
+        for (LSID sourceLSID : referenceCache.keySet())
         {
-            Class containerClass = lsid.getJavaClass();
-            if (containerClass.equals(source.getName()))
+            Class sourceClass = sourceLSID.getJavaClass();
+            if (sourceClass.equals(source))
             {
-                Class targetClass = referenceCache.get(lsid).getJavaClass();
-                if (targetClass.equals(target.getName()))
-                {
-                    count++;
-                }
+            	for (LSID targetLSID : referenceCache.get(sourceLSID))
+            	{
+            		Class targetClass = targetLSID.getJavaClass();
+            		if (targetClass.equals(target))
+            		{
+            			count++;
+            		}
+            	}
             }
         }
         return count;
-    }
-    
-    /**
-     * Populates archive flags on all images currently processed. This method
-     * should only be called <b>after</b> a full Bio-Formats metadata parsing
-     * cycle. 
-     * @param archive Whether or not the user requested the original files to
-     * be archived.
-     */
-    public void setArchive(boolean archive)
-    {
-    	List<Image> images = getSourceObjects(Image.class);
-        String[] files = reader.getUsedFiles();
-        
-    	if (archive)
-    	{
-    	    LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
-    	    ImageReader imageReader = (ImageReader) reader;
-            String formatString = imageReader.getReader().getClass().toString();
-            formatString = formatString.replace("class loci.formats.in.", "");
-            formatString = formatString.replace("Reader", "");
-    	    
-            for (int i = 0; i < files.length; i ++)
-            {
-                indexes.put("originaFileIndex", i);
-                
-                OriginalFile o = (OriginalFile) getSourceObject(OriginalFile.class, indexes);
-                File file = new File(files[i]);
-                
-                o.setName(toRType(file.getName()));
-                o.setSize(toRType(file.length()));
-                o.setFormat((Format) getEnumeration(Format.class, formatString));
-                o.setPath(toRType(file.getAbsolutePath()));
-                o.setSha1(toRType("Pending"));
-            }
-    	}
-    	for (int i = 0; i < images.size(); i ++)
-    	{
-    	    Image image = images.get(i);
-    		image.setArchived(toRType(archive));
-    		
-    		if (archive)
-    		{
-                LSID key = new LSID(Pixels.class, i, 0);
-                
-                for (int j = 0; j < files.length; j++)
-                {
-                    referenceCache.put(key, new LSID(OriginalFile.class, j));           
-                }
-    		}
-    	}
     }
 
     /* (non-Javadoc)
@@ -950,11 +1191,13 @@ public class OMEROMetadataStoreClient
 
     public void setDetectorID(String id, int instrumentIndex, int detectorIndex)
     {
+    	checkDuplicateLSID(Detector.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("instrumentIndex", instrumentIndex);
         indexes.put("detectorIndex", detectorIndex);
         IObjectContainer o = getIObjectContainer(Detector.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Detector.class, id, o);
     }
 
     public void setDetectorManufacturer(String manufacturer,
@@ -989,7 +1232,7 @@ public class OMEROMetadataStoreClient
             int logicalChannelIndex)
     {
         LSID key = new LSID(DetectorSettings.class, imageIndex, logicalChannelIndex);
-        referenceCache.put(key, new LSID(detector));
+        addReference(key, new LSID(detector));
     }
 
     private DetectorSettings getDetectorSettings(int imageIndex,
@@ -1100,22 +1343,6 @@ public class OMEROMetadataStoreClient
     {
     }
 
-    public void setDisplayOptionsProjectionZStart(Integer start, int imageIndex)
-    {
-    }
-
-    public void setDisplayOptionsProjectionZStop(Integer stop, int imageIndex)
-    {
-    }
-
-    public void setDisplayOptionsTimeTStart(Integer start, int imageIndex)
-    {
-    }
-
-    public void setDisplayOptionsTimeTStop(Integer stop, int imageIndex)
-    {
-    }
-
     public void setDisplayOptionsZoom(Float zoom, int imageIndex)
     {
     }
@@ -1190,20 +1417,30 @@ public class OMEROMetadataStoreClient
 
     public void setImageID(String id, int imageIndex)
     {
+    	checkDuplicateLSID(Image.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("imageIndex", imageIndex);
         IObjectContainer o = getIObjectContainer(Image.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Image.class, id, o);
     }
 
     public void setImageInstrumentRef(String instrumentRef, int imageIndex)
     {
         LSID key = new LSID(Image.class, imageIndex);
-        referenceCache.put(key, new LSID(instrumentRef));
+        addReference(key, new LSID(instrumentRef));
     }
 
     public void setImageName(String name, int imageIndex)
     {
+        // We don't want empty string image names
+        // Thu Oct  8 11:05:37 BST 2009
+        // Chris Allan <callan at lifesci dot dundee dot ac dot uk>
+        // http://trac.openmicroscopy.org.uk/omero/ticket/1523
+        if (name != null && name.length() == 0)
+        {
+            return;
+        }
         Image o = getImage(imageIndex);
         o.setName(toRType(name));
     }
@@ -1240,13 +1477,23 @@ public class OMEROMetadataStoreClient
         ImagingEnvironment o = getImagingEnvironment(imageIndex);
         o.setTemperature(toRType(temperature));
     }
+    
+    private Instrument getInstrument(int instrumentIndex)
+    {
+        LinkedHashMap<String, Integer> indexes = 
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("instrumentIndex", instrumentIndex);
+        return getSourceObject(Instrument.class, indexes);
+    }
 
     public void setInstrumentID(String id, int instrumentIndex)
     {
+    	checkDuplicateLSID(Instrument.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("instrumentIndex", instrumentIndex);
         IObjectContainer o = getIObjectContainer(Instrument.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Instrument.class, id, o);
     }
 
     public void setLaserFrequencyMultiplication(
@@ -1303,11 +1550,13 @@ public class OMEROMetadataStoreClient
     public void setLightSourceID(String id, int instrumentIndex,
             int lightSourceIndex)
     {
+    	checkDuplicateLSID(LightSource.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("instrumentIndex", instrumentIndex);
         indexes.put("lightSourceIndex", lightSourceIndex);  
         IObjectContainer o = getIObjectContainer(LightSource.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(LightSource.class, id, o);
     }
 
     public void setLightSourceManufacturer(String manufacturer,
@@ -1366,7 +1615,7 @@ public class OMEROMetadataStoreClient
             int imageIndex, int logicalChannelIndex)
     {
         LSID key = new LSID(LightSettings.class, imageIndex, logicalChannelIndex);
-        referenceCache.put(key, new LSID(lightSource));
+        addReference(key, new LSID(lightSource));
     }
 
     public void setLightSourceSettingsWavelength(Integer wavelength,
@@ -1417,11 +1666,13 @@ public class OMEROMetadataStoreClient
     public void setLogicalChannelID(String id, int imageIndex,
             int logicalChannelIndex)
     {
+    	checkDuplicateLSID(LogicalChannel.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("imageIndex", imageIndex);
         indexes.put("logicalChannelIndex", logicalChannelIndex);  
         IObjectContainer o = getIObjectContainer(LogicalChannel.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(LogicalChannel.class, id, o);
     }
 
     public void setLogicalChannelIlluminationType(String illuminationType,
@@ -1484,11 +1735,13 @@ public class OMEROMetadataStoreClient
 
     public void setOTFID(String id, int instrumentIndex, int otfIndex)
     {
+    	checkDuplicateLSID(OTF.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("instrumentIndex", instrumentIndex);
         indexes.put("otfIndex", otfIndex);  
         IObjectContainer o = getIObjectContainer(OTF.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(OTF.class, id, o);
     }
 
     public void setOTFOpticalAxisAveraged(Boolean opticalAxisAveraged,
@@ -1558,11 +1811,13 @@ public class OMEROMetadataStoreClient
     public void setObjectiveID(String id, int instrumentIndex,
             int objectiveIndex)
     {
+    	checkDuplicateLSID(Objective.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("instrumentIndex", instrumentIndex);
         indexes.put("objectiveIndex", objectiveIndex);  
         IObjectContainer o = getIObjectContainer(Objective.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Objective.class, id, o);
     }
 
     public void setObjectiveImmersion(String immersion, int instrumentIndex,
@@ -1628,11 +1883,13 @@ public class OMEROMetadataStoreClient
 
     public void setPixelsID(String id, int imageIndex, int pixelsIndex)
     {
+    	checkDuplicateLSID(Pixels.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("imageIndex", imageIndex);
         indexes.put("pixelsIndex", pixelsIndex);  
         IObjectContainer o = getIObjectContainer(Pixels.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Pixels.class, id, o);
     }
 
     public void setPixelsPixelType(String pixelType, int imageIndex,
@@ -1739,10 +1996,12 @@ public class OMEROMetadataStoreClient
 
     public void setPlateID(String id, int plateIndex)
     {
+    	checkDuplicateLSID(Plate.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("plateIndex", plateIndex); 
         IObjectContainer o = getIObjectContainer(Plate.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Plate.class, id, o);
     }
 
     public void setPlateName(String name, int plateIndex)
@@ -1814,11 +2073,13 @@ public class OMEROMetadataStoreClient
 
     public void setReagentID(String id, int screenIndex, int reagentIndex)
     {
+    	checkDuplicateLSID(Reagent.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("screenIndex", screenIndex);
         indexes.put("reagentIndex", reagentIndex);  
         IObjectContainer o = getIObjectContainer(Reagent.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Reagent.class, id, o);
     }
 
     public void setReagentName(String name, int screenIndex, int reagentIndex)
@@ -1842,105 +2103,52 @@ public class OMEROMetadataStoreClient
     public void setScreenAcquisitionEndTime(String endTime, int screenIndex,
             int screenAcquisitionIndex)
     {
-        ScreenAcquisition o = 
-            getScreenAcquisition(screenIndex, screenAcquisitionIndex);
-        
-        try
-        {
-            SimpleDateFormat parser =
-                new SimpleDateFormat("yyyy-MM-d'T'HH:mm:ssZ");
-            Timestamp ts = new Timestamp(parser.parse(endTime).getTime());
-            o.setEndTime(toRType(ts));
-        }
-        catch (ParseException e)
-        {
-            log.error(String.format("Parsing start time failed!"), e);
-        }
-    }
-
-    private ScreenAcquisition getScreenAcquisition(int screenIndex,
-            int screenAcquisitionIndex)
-    {
-        LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
-        indexes.put("screenIndex", screenIndex);
-        indexes.put("screenAcquisitionIndex", screenAcquisitionIndex);
-        return getSourceObject(ScreenAcquisition.class, indexes);
+        // Disabled
     }
 
     public void setScreenAcquisitionID(String id, int screenIndex,
             int screenAcquisitionIndex)
     {
-        LSID lsid = 
-            new LSID(ScreenAcquisition.class, screenIndex, screenAcquisitionIndex);
-        IObjectContainer o = containerCache.get(lsid);
-        o.LSID = id;
+        // Disabled
     }
 
     public void setScreenAcquisitionStartTime(String startTime,
             int screenIndex, int screenAcquisitionIndex)
     {
-        ScreenAcquisition o = 
-            getScreenAcquisition(screenIndex, screenAcquisitionIndex);
-        
-        try
-        {
-            SimpleDateFormat parser =
-                new SimpleDateFormat("yyyy-MM-d'T'HH:mm:ssZ");
-            Timestamp ts = new Timestamp(parser.parse(startTime).getTime());
-            o.setStartTime(toRType(ts));
-        }
-        catch (ParseException e)
-        {
-            log.error(String.format("Parsing start time failed!"), e);
-        }
+        // Disabled
     }
 
     public void setScreenID(String id, int screenIndex)
     {
-        LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
-        indexes.put("screenIndex", screenIndex); 
-        IObjectContainer o = getIObjectContainer(Screen.class, indexes);
-        o.LSID = id;
+        // Disabled
     }
 
     public void setScreenName(String name, int screenIndex)
     {
-        Screen o = getScreen(screenIndex);
-        o.setName(toRType(name));
-    }
-
-    private Screen getScreen(int screenIndex)
-    {
-        LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
-        indexes.put("screenIndex", screenIndex);
-        return getSourceObject(Screen.class, indexes);
+        // Disabled
     }
 
     public void setScreenProtocolDescription(String protocolDescription,
             int screenIndex)
     {
-        Screen o = getScreen(screenIndex);
-        o.setProtocolDescription(toRType(protocolDescription));
+        // Disabled
     }
 
     public void setScreenProtocolIdentifier(String protocolIdentifier,
             int screenIndex)
     {
-        Screen o = getScreen(screenIndex);
-        o.setProtocolIdentifier(toRType(protocolIdentifier));
+        // Disabled
     }
 
     public void setScreenReagentSetDescription(String reagentSetDescription,
             int screenIndex)
     {
-        Screen o = getScreen(screenIndex);
-        o.setReagentSetDescription(toRType(reagentSetDescription));
+        // Disabled
     }
 
     public void setScreenType(String type, int screenIndex)
     {
-        Screen o = getScreen(screenIndex);
-        o.setType(toRType(type));
+        // Disabled
     }
 
     public void setStageLabelName(String name, int imageIndex)
@@ -1977,22 +2185,22 @@ public class OMEROMetadataStoreClient
     public void setStagePositionPositionX(Float positionX, int imageIndex,
             int pixelsIndex, int planeIndex)
     {    
-    	PlaneInfo o = getPlaneInfo(imageIndex, pixelsIndex, planeIndex);
-    	o.setPositionX(toRType(positionX));
+        PlaneInfo o = getPlaneInfo(imageIndex, pixelsIndex, planeIndex);
+        o.setPositionX(toRType(positionX));
     }
 
     public void setStagePositionPositionY(Float positionY, int imageIndex,
             int pixelsIndex, int planeIndex)
     {
-    	PlaneInfo o = getPlaneInfo(imageIndex, pixelsIndex, planeIndex);
-    	o.setPositionY(toRType(positionY));
+        PlaneInfo o = getPlaneInfo(imageIndex, pixelsIndex, planeIndex);
+        o.setPositionY(toRType(positionY));
     }
 
     public void setStagePositionPositionZ(Float positionZ, int imageIndex,
             int pixelsIndex, int planeIndex)
     {
-    	PlaneInfo o = getPlaneInfo(imageIndex, pixelsIndex, planeIndex);
-    	o.setPositionZ(toRType(positionZ));
+        PlaneInfo o = getPlaneInfo(imageIndex, pixelsIndex, planeIndex);
+        o.setPositionZ(toRType(positionZ));
     }
 
     public void setTiffDataFileName(String fileName, int imageIndex,
@@ -2064,11 +2272,13 @@ public class OMEROMetadataStoreClient
 
     public void setWellID(String id, int plateIndex, int wellIndex)
     {
+    	checkDuplicateLSID(Well.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("plateIndex", plateIndex);
         indexes.put("wellIndex", wellIndex);  
         IObjectContainer o = getIObjectContainer(Well.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Well.class, id, o);
     }
 
     public void setWellRow(Integer row, int plateIndex, int wellIndex)
@@ -2080,12 +2290,14 @@ public class OMEROMetadataStoreClient
     public void setWellSampleID(String id, int plateIndex, int wellIndex,
             int wellSampleIndex)
     {
+    	checkDuplicateLSID(WellSample.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("plateIndex", plateIndex);
         indexes.put("wellIndex", wellIndex); 
         indexes.put("wellSampleIndex", wellSampleIndex);
         IObjectContainer o = getIObjectContainer(WellSample.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(WellSample.class, id, o);
     }
 
     public void setWellSampleIndex(Integer index, int plateIndex,
@@ -2141,71 +2353,424 @@ public class OMEROMetadataStoreClient
             throw new RuntimeException(e);
         }
     }
+    
+    /**
+     * Creates an original file object from a Java file object along with some
+     * metadata specific to OMERO in the container cache or returns the
+     * original file as already created in the supplied map.
+     * @param file Java file object to pull metadata from.
+     * @param indexes Container cache indexes to use.
+     * @param formatString Original file format as a string.
+     * @param existing Existing original files keyed by absolute path.
+     * @return Created original file source object.
+     */
+    private OriginalFile createOriginalFileFromFile(
+    		File file, LinkedHashMap<String, Integer> indexes,
+    		String formatString)
+    {
+		OriginalFile o = (OriginalFile) 
+			getSourceObject(OriginalFile.class, indexes);
+		Format format = (Format) getEnumeration(Format.class, formatString);
+		o.setName(toRType(file.getName()));
+		o.setSize(toRType(file.length()));
+		o.setFormat(format);
+		o.setPath(toRType(file.getAbsolutePath()));
+		o.setSha1(toRType("Pending"));
+		return o;
+    }
+    
+    /**
+     * Creates a temporary file on disk containing all metadata in the
+     * Bio-Formats metadata hash table for the current series.
+     * @return Temporary file created.
+     */
+    private File createSeriesMetadataFile()
+    {
+    	Hashtable globalMetadata = reader.getGlobalMetadata();
+    	Hashtable seriesMetadata = reader.getSeriesMetadata();
+    	FileOutputStream stream = null;
+    	OutputStreamWriter writer= null;
+    	try
+    	{
+    		File metadataFile = TempFileManager.createTempFile("metadata", ".txt");
+    		stream = new FileOutputStream(metadataFile);
+    		writer = new OutputStreamWriter(stream);
+    		metadataFile.deleteOnExit();
+    		writer.write("[GlobalMetadata]\n");
+    		for (Object key : globalMetadata.keySet())
+    		{
+    			String s = key.toString() + "="
+    			           + globalMetadata.get(key).toString() + "\n";
+    			writer.write(s);
+    		}
+    		writer.write("[SeriesMetadata]\n");
+    		for (Object key : seriesMetadata.keySet())
+    		{
+    			String s = key.toString() + "="
+    			           + seriesMetadata.get(key).toString() + "\n";
+    			writer.write(s);
+    		}
+    		return metadataFile;
+    	}
+    	catch (IOException e)
+    	{
+    		log.error("Unable to create series metadata file.", e);
+    		return null;
+    	}
+    	finally
+    	{
+    		try
+    		{
+    			if (writer != null)
+    			{
+    				writer.close();
+    			}
+    			if (stream != null)
+    			{
+    				stream.close();
+    			}
+    		}
+    		catch (IOException e)
+    		{
+    			log.error("Unable to close writer or stream.", e);
+    		}
+    	}
+    }
+    
+    /**
+     * Populates archive flags on all images currently processed links
+     * relevant original metadata files as requested and performs graph logic
+     * to have the scafolding in place for later original file upload if
+     * we are of the HCS domain.
+     * @param archive Whether or not the user requested the original files to
+     * be archived.
+     * @return A list of the temporary metadata files created on local disk.
+     */
+    public List<File> setArchiveScreeningDomain(boolean archive)
+    {
+    	List<File> metadataFiles = new ArrayList<File>();
+    	String[] usedFiles = reader.getUsedFiles();
+    	List<String> companionFiles = getFilteredCompanionFiles();
+    	ImageReader imageReader = (ImageReader) reader;
+    	String formatString = 
+    		imageReader.getReader().getClass().toString();
+    	formatString = formatString.replace("class loci.formats.in.", "");
+    	formatString = formatString.replace("Reader", "");
+    	LSID plateKey = new LSID(Plate.class, 0);
+		// Populate the archived flag on the image. This inadvertently
+		// ensures that an Image object (and corresponding container)
+		// exists.
+    	for (int series = 0; series < reader.getSeriesCount(); series++)
+    	{
+        	LinkedHashMap<String, Integer> imageIndexes =
+        		new LinkedHashMap<String, Integer>();
+        	imageIndexes.put("imageIndex", series);
+    		Image image = getSourceObject(Image.class, imageIndexes);
+    		image.setArchived(toRType(archive));
+    	}
+    	// Create all original file objects for later population based on
+    	// the existence or abscence of companion files and the archive
+    	// flag. This increments the original file count by the number of
+    	// files to actually be created.
+    	int originalFileIndex = 0;
+    	for (String usedFilename : usedFiles)
+    	{
+    		File usedFile = new File(usedFilename);
+    		boolean isCompanionFile = companionFiles == null? false :
+    			companionFiles.contains(usedFilename);
+    		if (archive || isCompanionFile)
+    		{
+    			LinkedHashMap<String, Integer> indexes = 
+    				new LinkedHashMap<String, Integer>();
+    			indexes.put("originalFileIndex", originalFileIndex);
+    			if (isCompanionFile)
+    			{
+    				// PATH 1: The file is a companion file, create it,
+    				// and increment the next original file's index.
+    				String format = "Companion/" + formatString;
+    				createOriginalFileFromFile(usedFile, indexes, format);
+    				addCompanionFileAnnotationTo(plateKey, indexes,
+    						                     originalFileIndex);
+    				originalFileIndex++;
+    			}
+    			else
+    			{
+    				// PATH 2: We're archiving and the file is not a
+    				// companion file, create it, and increment the next
+    				// original file's index.
+    				createOriginalFileFromFile(usedFile, indexes,
+    						formatString);
+    				LSID originalFileKey = 
+    					new LSID(OriginalFile.class, originalFileIndex);
+    				addReference(plateKey, originalFileKey);
+    				originalFileIndex++;
+    			}
+    		}
+    	}
+    	return metadataFiles;
+    }
 
+    /**
+     * Populates archive flags on all images currently processed links
+     * relevant original metadata files as requested and performs graph logic
+     * to have the scafolding in place for later original file upload.
+     * @param archive Whether or not the user requested the original files to
+     * be archived.
+     * @param useMetadataFile Whether or not to dump all metadata to a flat
+     * file annotation on the server.
+     * @return A list of the temporary metadata files created on local disk.
+     */
+    public List<File> setArchive(boolean archive, boolean useMetadataFile)
+    {
+    	List<File> metadataFiles = new ArrayList<File>();
+    	int originalFileIndex = 0;
+		Map<String, Integer> pathIndexMap = new HashMap<String, Integer>();
+    	for (int series = 0; series < reader.getSeriesCount(); series++)
+    	{
+    		reader.setSeries(series);
+    		String[] usedFiles = reader.getSeriesUsedFiles();
+    		// Collection of companion files so we can use contains()
+    		List<String> companionFiles = getFilteredSeriesCompanionFiles();
+    		
+    		ImageReader imageReader = (ImageReader) reader;
+    		String formatString = 
+    			imageReader.getReader().getClass().toString();
+    		formatString = formatString.replace("class loci.formats.in.", "");
+    		formatString = formatString.replace("Reader", "");
+    		LSID pixelsKey = new LSID(Pixels.class, series, 0);
+    		LSID imageKey = new LSID(Image.class, series);
+    		LinkedHashMap<String, Integer> imageIndexes =
+    			new LinkedHashMap<String, Integer>();
+    		imageIndexes.put("imageIndex", series);
+
+    		// Populate the archived flag on the image. This inadvertently
+    		// ensures that an Image object (and corresponding container)
+    		// exists.
+    		Image image = getSourceObject(Image.class, imageIndexes);
+    		image.setArchived(toRType(archive));
+    		
+    		// If we have been asked to create a metadata file with all the
+    		// metadata dumped out, do so, add it to the collection we're to
+    		// return and create an OriginalFile object to hold state on the
+    		// server and a companion file annotation to link it to the pixels
+    		// set itself. This increments the original file count if enabled.
+    		if (useMetadataFile)
+    		{
+    			File metadataFile = createSeriesMetadataFile();
+    			metadataFiles.add(metadataFile);
+				LinkedHashMap<String, Integer> indexes = 
+					new LinkedHashMap<String, Integer>();
+				indexes.put("originalFileIndex", originalFileIndex);
+				String format = "text/plain";
+				OriginalFile originalFile = 
+					createOriginalFileFromFile(metadataFile, indexes, format);
+				originalFile.setName(toRType("original_metadata.txt"));
+                indexes = new LinkedHashMap<String, Integer>();
+                indexes.put("imageIndex", series);
+                indexes.put("originalFileIndex", originalFileIndex);
+                addCompanionFileAnnotationTo(imageKey, indexes,
+                		                     originalFileIndex);
+				originalFileIndex++;
+    		}
+    		
+    		// Create all original file objects for later population based on
+    		// the existence or abscence of companion files and the archive
+    		// flag. This increments the original file count by the number of
+    		// files to actually be created.
+    		for (int i = 0; i < usedFiles.length; i++)
+    		{
+    			String usedFilename = usedFiles[i];
+    			File usedFile = new File(usedFilename);
+    			String absolutePath = usedFile.getAbsolutePath();
+    			log.debug("Series: " + i + " file: " + absolutePath);
+    			boolean isCompanionFile = companionFiles == null? false :
+    				                      companionFiles.contains(usedFilename);
+    			if (archive || isCompanionFile)
+    			{
+    				LinkedHashMap<String, Integer> indexes = 
+    					new LinkedHashMap<String, Integer>();
+    				indexes.put("originalFileIndex", originalFileIndex);
+    				int usedFileIndex = originalFileIndex;
+    				if (pathIndexMap.containsKey(absolutePath))
+    				{
+    					// PATH 1: We've already seen this path before, re-use
+    					// the same original file index.
+    					usedFileIndex = pathIndexMap.get(absolutePath);
+    				}
+    				else if (isCompanionFile)
+    				{
+    					// PATH 2: The file is a companion file, create it,
+    					// put the new original file index into our cached map
+    					// and increment the next original file's index.
+    					String format = "Companion/" + formatString;
+    					createOriginalFileFromFile(usedFile, indexes, format);
+    					pathIndexMap.put(absolutePath, usedFileIndex);
+    					originalFileIndex++;
+    				}
+    				else
+    				{
+    					// PATH 3: We're archiving and the file is not a
+    					// companion file, create it, put the new original file
+    					// index into our cached map, increment the next
+    					// original file's index and link it to our pixels set.
+    					createOriginalFileFromFile(usedFile, indexes,
+    					                           formatString);
+    					pathIndexMap.put(absolutePath, usedFileIndex);
+    					originalFileIndex++;
+    				}
+    				
+    				if (isCompanionFile)
+    				{
+                        indexes = new LinkedHashMap<String, Integer>();
+                        indexes.put("imageIndex", series);
+                        indexes.put("originalFileIndex", usedFileIndex);
+                        addCompanionFileAnnotationTo(imageKey, indexes,
+                        		                     usedFileIndex);
+    				}
+    				else
+    				{
+        				LSID originalFileKey = 
+        					new LSID(OriginalFile.class, usedFileIndex);
+        				addReference(pixelsKey, originalFileKey);
+    				}
+    			}
+    		}
+    	}
+    	return metadataFiles;
+    }
+    
+    /**
+     * Filters a set of filenames.
+     * @param files An array of the files to filter.
+     * @return A collection of the filtered files.
+     */
+    private List<String> filterFilenames(String[] files)
+    {
+    	if (files == null)
+    	{
+    		return null;
+    	}
+    	List<String> filteredFiles = new ArrayList<String>();
+    	for (String file : files)
+    	{
+    		if (!file.endsWith(".tif")
+    			&& !file.endsWith(".tiff"))
+    		{
+    			filteredFiles.add(file);
+    		}
+    	}
+    	return filteredFiles;
+    }
+
+    /**
+     * Returns the current set of filtered companion files that the Bio-Formats
+     * image reader contains.
+     * @return See above.
+     * @see getFilteredSeriesCompanionFiles()
+     */
+    public List<String> getFilteredCompanionFiles()
+    {
+    	return filterFilenames(reader.getUsedFiles(true));
+    }
+    
+    /**
+     * Returns the current set of filtered companion files that the Bio-Formats
+     * image reader contains for the current series.
+     * @return See above.
+     * @see getFilteredCompanionFiles()
+     */
+    public List<String> getFilteredSeriesCompanionFiles()
+    {
+    	return filterFilenames(reader.getSeriesUsedFiles(true));
+    }
+    
+    /**
+     * Adds a file annotation and original file reference linked to a given
+     * base LSID target.
+     * @param target LSID of the target object.
+     * @param indexes Indexes of the annotation.
+     * @param originalFileIndex Index of the original file.
+     */
+    private void addCompanionFileAnnotationTo(
+    		LSID target, LinkedHashMap<String, Integer> indexes,
+    		int originalFileIndex)
+    {
+    	FileAnnotation a = (FileAnnotation) 
+    	getSourceObject(FileAnnotation.class, indexes);
+    	a.setNs(rstring(NS_COMPANION));
+
+    	Collection<Integer> indexValues = indexes.values();
+    	Integer[] integerValues = indexValues.toArray(
+    			new Integer[indexValues.size()]);
+    	int[] values = new int[integerValues.length];
+    	for (int i = 0; i < integerValues.length; i++)
+    	{
+    		values[i] = integerValues[i].intValue();
+    	}
+    	LSID annotationKey = new LSID(FileAnnotation.class, values);
+    	LSID originalFileKey = new LSID(OriginalFile.class,
+    			originalFileIndex);
+    	addReference(target, annotationKey);
+    	addReference(annotationKey, originalFileKey);
+    }
+    
     /**
      * Writes binary original file data to the OMERO server.
      * @param files Files to populate against an original file list.
-     * @param pixels Original file list source.
+     * @param originalFileMap Map of absolute path against original file
+     * objects that we are to populate.
      */
-    public void writeFilesToFileStore(File[] files, Pixels pixels)
+    public void writeFilesToFileStore(
+    		List<File> files, Map<String, OriginalFile> originalFileMap)
     {
-    	// Populate a hash map of filename --> original file
-    	List<OriginalFile> originalFileList = pixels.linkedOriginalFileList();
-    	Map<String, OriginalFile> originalFileMap =
-    		new HashMap<String, OriginalFile>(originalFileList.size());
-    	for (OriginalFile originalFile: originalFileList)
-    	{
-    		String fileName = originalFile.getName().getValue();
-    		originalFileMap.put(fileName, originalFile);
-    	}
-    	
-    	// Lookup each source file in our hash map and write it to the
-    	// correct original file object server side.
-    	byte[] buf = new byte[1048576];  // 1 MB buffer
-    	for (File file : files)
-    	{
-    		OriginalFile originalFile = originalFileMap.get(file.getName());
-    		if (originalFile == null)
-    		{
-    			log.warn("Cannot lookup original file with name: "
-    					 + file.getAbsolutePath());
-    			continue;
-    		}
+        // Lookup each source file in our hash map and write it to the
+        // correct original file object server side.
+        byte[] buf = new byte[1048576];  // 1 MB buffer
+        for (File file : files)
+        {
+            OriginalFile originalFile = 
+            	originalFileMap.get(file.getAbsolutePath());
+            if (originalFile == null)
+            {
+                log.warn("Cannot lookup original file with path: "
+                         + file.getAbsolutePath());
+                continue;
+            }
 
-    		FileInputStream stream = null;
-    		try
-    		{    		
-    			stream = new FileInputStream(file);
-        		rawFileStore.setFileId(originalFile.getId().getValue());
-    			int rlen = 0;
-    			int offset = 0;
-    			while (stream.available() != 0)
-    			{
-    				rlen = stream.read(buf);
-    				rawFileStore.write(buf, offset, rlen);
-    				offset += rlen;
-    			}
-    		}
-    		catch (Exception e)
-    		{
-    			log.error("I/O or server error populating file store.", e);
-    			break;
-    		}
-    		finally
-    		{
-    			if (stream != null)
-    			{
-    				try
-    				{
-    					stream.close();
-    				}
-    				catch (Exception e)
-    				{
-    					log.error("I/O error closing stream.", e);
-    				}
-    			}
-    		}
-    	}
+            FileInputStream stream = null;
+            try
+            {           
+                stream = new FileInputStream(file);
+                rawFileStore.setFileId(originalFile.getId().getValue());
+                int rlen = 0;
+                int offset = 0;
+                while (stream.available() != 0)
+                {
+                    rlen = stream.read(buf);
+                    rawFileStore.write(buf, offset, rlen);
+                    offset += rlen;
+                }
+            }
+            catch (Exception e)
+            {
+                log.error("I/O or server error populating file store.", e);
+                break;
+            }
+            finally
+            {
+                if (stream != null)
+                {
+                    try
+                    {
+                        stream.close();
+                    }
+                    catch (Exception e)
+                    {
+                        log.error("I/O error closing stream.", e);
+                    }
+                }
+            }
+        }
     }
     
     public long getRepositorySpace()
@@ -2225,11 +2790,11 @@ public class OMEROMetadataStoreClient
      */
     public void postProcess()
     {
-		// Perform model processing
-		for (ModelProcessor processor : modelProcessors)
-		{
-			processor.process(this);
-		}
+        // Perform model processing
+        for (ModelProcessor processor : modelProcessors)
+        {
+            processor.process(this);
+        }
     }
 
     /**
@@ -2239,54 +2804,54 @@ public class OMEROMetadataStoreClient
      */
     public List<Pixels> saveToDB()
     {
-    	try
-    	{
-        	Collection<IObjectContainer> containers = containerCache.values();
-        	IObjectContainer[] containerArray = 
-        		containers.toArray(new IObjectContainer[containers.size()]);
+        try
+        {
+            Collection<IObjectContainer> containers = containerCache.values();
+            IObjectContainer[] containerArray = 
+                containers.toArray(new IObjectContainer[containers.size()]);
             
-        	if (log.isDebugEnabled())
-        	{
-        		for (LSID key : containerCache.keySet())
-        		{
-        			String s = String.format("%s == %s,%s", 
-        					key, containerCache.get(key).sourceObject,
-        					containerCache.get(key).LSID);
-        			log.debug(s);
-        		}
-        	}
-            
-        	log.debug("Starting references....");
+            if (log.isDebugEnabled())
+            {
+            	log.debug("Starting containers....");
+                for (LSID key : containerCache.keySet())
+                {
+                    String s = String.format("%s == %s,%s", 
+                            key, containerCache.get(key).sourceObject,
+                            containerCache.get(key).LSID);
+                    log.debug(s);
+                }
 
-        	if (log.isDebugEnabled())
-        	{
-        		for (String key : referenceStringCache.keySet())
-        		{
-        			String s = String.format("%s == %s", key,
-        					                 referenceStringCache.get(key));
-        			log.debug(s);
-        		}
-        		
-        		log.debug("containerCache contains " + containerCache.size()
-        				  + " entries.");
-        		log.debug("referenceCache contains " + referenceCache.size()
-        				  + " entries.");
-        	}
+                log.debug("Starting references....");
+                for (String key : referenceStringCache.keySet())
+                {
+                	for (String value : referenceStringCache.get(key))
+                	{
+                		String s = String.format("%s == %s", key, value);
+                		log.debug(s);
+                	}
+                }
+                
+                log.debug("containerCache contains " + containerCache.size()
+                          + " entries.");
+                log.debug("referenceCache contains " 
+                		  + countCachedReferences(null, null)
+                          + " entries.");
+            }
             
-        	delegate.updateObjects(containerArray);
-        	delegate.updateReferences(referenceStringCache);
-        	pixelsList = delegate.saveToDB();
-        	
-        	if (log.isDebugEnabled())
-        	{
-        		long pixelsId;
-        		for (Pixels pixels : pixelsList)
-        		{
-        			pixelsId = pixels.getId().getValue();
-        			log.debug("Saving pixels id: "  + pixelsId);
-        		}
-        	}
-        	return pixelsList;
+            delegate.updateObjects(containerArray);
+            delegate.updateReferences(referenceStringCache);
+            pixelsList = delegate.saveToDB();
+            
+            if (log.isDebugEnabled())
+            {
+                long pixelsId;
+                for (Pixels pixels : pixelsList)
+                {
+                    pixelsId = pixels.getId().getValue();
+                    log.debug("Saved Pixels with ID: "  + pixelsId);
+                }
+            }
+            return pixelsList;
         }
         catch (ServerError e)
         {
@@ -2294,18 +2859,19 @@ public class OMEROMetadataStoreClient
         }
     }
 
-    /**
-     * Saves objects in the OMERO server. "Hack" for Part updates in the 
-     * journal workflow.
-     * @param objects Objects to save.
-     * @throws ServerError If there was an error communicating with the
-     * OMERO server.
-     */
-    public void save(List<IObject> objects) throws ServerError
+    public List<InteractiveProcessorPrx> launchProcessing()
     {
-       iUpdate.saveArray(objects);
+        try {
+            return delegate.postProcess();
+        } catch (Exception e) {
+            // Becasuse this method is evolving, we're going to
+            // permit an exception to not stop import. Eventually,
+            // this could be dangerous. ~Josh.
+            log.warn("Failed to launch post-processing", e);
+            return null;
+        }
     }
-
+    
     public Project getProject(long projectId)
     {
         try
@@ -2319,7 +2885,7 @@ public class OMEROMetadataStoreClient
     }
 
     @SuppressWarnings("unchecked")
-	public <T extends IObject> T getTarget(Class<T> klass, long id)
+    public <T extends IObject> T getTarget(Class<T> klass, long id)
     {
         try
         {
@@ -2374,48 +2940,48 @@ public class OMEROMetadataStoreClient
     
     public List<Project> getProjects()
     {
-    	try
-    	{
-    		List<IObject> objects = 
-    			iContainer.loadContainerHierarchy(Project.class.getName(), null, null);
-    		List<Project> projects = new ArrayList<Project>(objects.size());
-    		for (IObject object : objects)
-    		{
-    			projects.add((Project) object);
-    		}
-    		
-    		Collections.sort(projects, new SortProjectsByName());
-    		
-    		return projects;
-    	}
-    	catch (ServerError e)
-    	{
-    		throw new RuntimeException(e);
-    	}
+        try
+        {
+            List<IObject> objects = 
+                iContainer.loadContainerHierarchy(Project.class.getName(), null, new ParametersI().exp(rlong(getExperimenterID())));
+            List<Project> projects = new ArrayList<Project>(objects.size());
+            for (IObject object : objects)
+            {
+                projects.add((Project) object);
+            }
+            
+            Collections.sort(projects, new SortProjectsByName());
+            
+            return projects;
+        }
+        catch (ServerError e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     public List<Dataset> getDatasets(Project p)
     {
-    	try
-    	{
-    		List<Long> ids = new ArrayList<Long>(1);
-    		ids.add(p.getId().getValue());
-    		List<IObject> objects = 
-    			iContainer.loadContainerHierarchy(Project.class.getName(), ids, null);
-    		if (objects.size() > 0)
-    		{
-    		    Project project = (Project) objects.get(0);
-    		    
-    		    List<Dataset> datasets = project.linkedDatasetList();
-    		    Collections.sort(datasets, new SortDatasetsByName());
-    		    return datasets;
-    		}
-    		return null;
-    	}
-    	catch (ServerError e)
-    	{
-    		throw new RuntimeException(e);
-    	}
+        try
+        {
+            List<Long> ids = new ArrayList<Long>(1);
+            ids.add(p.getId().getValue());
+            List<IObject> objects = 
+                iContainer.loadContainerHierarchy(Project.class.getName(), ids, null);
+            if (objects.size() > 0)
+            {
+                Project project = (Project) objects.get(0);
+                
+                List<Dataset> datasets = project.linkedDatasetList();
+                Collections.sort(datasets, new SortDatasetsByName());
+                return datasets;
+            }
+            return null;
+        }
+        catch (ServerError e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     public Project addProject(String projectName, String projectDescription)
@@ -2458,27 +3024,27 @@ public class OMEROMetadataStoreClient
      */
     public void preparePixelsStore(List<Long> pixelsIds)
     {
-    	try
-    	{
-			rawPixelStore.prepare(pixelsIds);
-		}
-    	catch (ServerError e)
-    	{
-    		throw new RuntimeException(e);
-		}
+        try
+        {
+            rawPixelStore.prepare(pixelsIds);
+        }
+        catch (ServerError e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     public void setPlane(Long pixId, byte[] arrayBuf, int z, int c, int t)
-    	throws ServerError
+        throws ServerError
     {
-    	if (currentPixId != pixId)
-    	{
-    		//rawPixelStore.close();
-    		//rawPixelStore = serviceFactory.createRawPixelsStore();
-    		rawPixelStore.setPixelsId(pixId, true);
-    		currentPixId = pixId;
-    	}
-    	rawPixelStore.setPlane(arrayBuf, z, c, t);
+        if (currentPixId != pixId)
+        {
+            //rawPixelStore.close();
+            //rawPixelStore = serviceFactory.createRawPixelsStore();
+            rawPixelStore.setPixelsId(pixId, true);
+            currentPixId = pixId;
+        }
+        rawPixelStore.setPlane(arrayBuf, z, c, t);
     }
 
     /* (non-Javadoc)
@@ -2487,27 +3053,27 @@ public class OMEROMetadataStoreClient
     public void setChannelGlobalMinMax(int channel, double minimum,
             double maximum, int series)
     {
-    	Pixels pixels = 
-    		(Pixels) getSourceObject(new LSID(Pixels.class, series, 0));
-    	if (imageChannelGlobalMinMax == null)
-    	{
-    		int imageCount = countCachedContainers(Image.class);
-    		imageChannelGlobalMinMax = new double[imageCount][][];
-    	}
-    	double[][] channelGlobalMinMax = imageChannelGlobalMinMax[series];
-    	if (channelGlobalMinMax == null)
-    	{
-    		imageChannelGlobalMinMax[series] = channelGlobalMinMax =
-    			new double[pixels.getSizeC().getValue()][];
-    	}
-    	double[] globalMinMax = channelGlobalMinMax[channel];
-    	if (globalMinMax == null)
-    	{
-    		imageChannelGlobalMinMax[series][channel] = globalMinMax =
-    			new double[2];
-    	}
-    	globalMinMax[0] = minimum;
-    	globalMinMax[1] = maximum;
+        Pixels pixels = 
+            (Pixels) getSourceObject(new LSID(Pixels.class, series, 0));
+        if (imageChannelGlobalMinMax == null)
+        {
+            int imageCount = countCachedContainers(Image.class);
+            imageChannelGlobalMinMax = new double[imageCount][][];
+        }
+        double[][] channelGlobalMinMax = imageChannelGlobalMinMax[series];
+        if (channelGlobalMinMax == null)
+        {
+            imageChannelGlobalMinMax[series] = channelGlobalMinMax =
+                new double[pixels.getSizeC().getValue()][];
+        }
+        double[] globalMinMax = channelGlobalMinMax[channel];
+        if (globalMinMax == null)
+        {
+            imageChannelGlobalMinMax[series][channel] = globalMinMax =
+                new double[2];
+        }
+        globalMinMax[0] = minimum;
+        globalMinMax[1] = maximum;
     }
 
     /**
@@ -2518,17 +3084,17 @@ public class OMEROMetadataStoreClient
     {
         try
         {
-        	List<IObject> objectList = new ArrayList<IObject>(pixelsList.size());
-        	Image unloadedImage;
-        	for (Pixels pixels : pixelsList)
-        	{
-        		pixels.unloadCollections();
-        		pixels.unloadDetails();
-        		unloadedImage = new ImageI(pixels.getImage().getId(), false);
-        		pixels.setImage(unloadedImage);
-        		objectList.add(pixels);
-        	}
-        	iUpdate.saveArray(objectList);
+            List<IObject> objectList = new ArrayList<IObject>(pixelsList.size());
+            Image unloadedImage;
+            for (Pixels pixels : pixelsList)
+            {
+                pixels.unloadCollections();
+                pixels.unloadDetails();
+                unloadedImage = new ImageI(pixels.getImage().getId(), false);
+                pixels.setImage(unloadedImage);
+                objectList.add(pixels);
+            }
+            iUpdate.saveArray(objectList);
         }
         catch (ServerError e)
         {
@@ -2579,6 +3145,34 @@ public class OMEROMetadataStoreClient
             throw new RuntimeException(e);
         }
     }
+    
+    /**
+     * Resets the defaults and generates thumbnails for a given set of Pixels 
+     * IDs. 
+     * @param plateIds Set of Plate IDs to reset defaults and thumbnails for.
+     * @param pixelsIds Set of Pixels IDs to reset defaults and thumbnails for.
+     */
+    public void resetDefaultsAndGenerateThumbnails(List<Long> plateIds,
+    		                                       List<Long> pixelsIds)
+    {
+    	try
+    	{
+    		if (plateIds.size() > 0)
+    		{
+    			iSettings.resetDefaultsInSet("Plate", plateIds);
+    		}
+    		else
+    		{
+    			iSettings.resetDefaultsInSet("Pixels", pixelsIds);
+    		}
+    		thumbnailStore.createThumbnailsByLongestSideSet(
+    				rint(DEFAULT_INSIGHT_THUMBNAIL_LONGEST_SIDE), pixelsIds);
+    	}
+    	catch (ServerError e)
+    	{
+    		throw new RuntimeException(e);
+    	}
+    }
 
     public void setExperimentDescription(String description, int experimentIndex)
     {
@@ -2595,10 +3189,12 @@ public class OMEROMetadataStoreClient
 
     public void setExperimentID(String id, int experimentIndex)
     {
+    	checkDuplicateLSID(Experiment.class, id);
         LinkedHashMap<String, Integer> indexes = new LinkedHashMap<String, Integer>();
         indexes.put("experimentIndex", experimentIndex);
         IObjectContainer o = getIObjectContainer(Experiment.class, indexes);
         o.LSID = id;
+        addAuthoritativeContainer(Experiment.class, id, o);
     }
 
     public void setExperimentType(String type, int experimentIndex)
@@ -2623,14 +3219,14 @@ public class OMEROMetadataStoreClient
             int logicalChannelIndex)
     {
         LSID key = new LSID(LogicalChannel.class, imageIndex, logicalChannelIndex);
-        referenceCache.put(key, new LSID(otf));
+        addReference(key, new LSID(otf));
     }
 
     public void setOTFObjective(String objective, int instrumentIndex,
             int otfIndex)
     {
         LSID key = new LSID(OTF.class, instrumentIndex, otfIndex);
-        referenceCache.put(key, new LSID(objective));
+        addReference(key, new LSID(objective));
     }
 
     /* ---- Objective Settings ---- */
@@ -2658,7 +3254,7 @@ public class OMEROMetadataStoreClient
     public void setObjectiveSettingsObjective(String objective, int imageIndex)
     {
         LSID key = new LSID(ObjectiveSettings.class, imageIndex);
-        referenceCache.put(key, new LSID(objective));
+        addReference(key, new LSID(objective));
     }
 
     public void setObjectiveSettingsRefractiveIndex(Float refractiveIndex,
@@ -2713,84 +3309,84 @@ public class OMEROMetadataStoreClient
      */
     public class OMEXMLModelComparator implements Comparator<LSID>
     {
-    	/** 
-    	 * The collator that we use to alphabetically sort by class name
-    	 * within a given level of the OME-XML hierarchy.
-    	 */
-    	private RuleBasedCollator stringComparator = 
-    		(RuleBasedCollator) Collator.getInstance(Locale.ENGLISH);
-    	
-		public int compare(LSID x, LSID y)
-		{
-			// Handle identical LSIDs
-			if (x.equals(y))
-			{
-				return 0;
-			}
-			
-			// Parse the LSID for hierarchical equivalence tests.
-			Class<? extends IObject> xClass = x.getJavaClass();
-			Class<? extends IObject> yClass = y.getJavaClass();
-			int[] xIndexes = x.getIndexes();
-			int[] yIndexes = y.getIndexes();
-			
-			// Handle the null class (one or more unparsable internal 
-			// references) case.
-			if (xClass == null || yClass == null)
-			{
-				return stringComparator.compare(x.toString(), y.toString()); 
-			}
+        /** 
+         * The collator that we use to alphabetically sort by class name
+         * within a given level of the OME-XML hierarchy.
+         */
+        private RuleBasedCollator stringComparator = 
+            (RuleBasedCollator) Collator.getInstance(Locale.ENGLISH);
+        
+        public int compare(LSID x, LSID y)
+        {
+            // Handle identical LSIDs
+            if (x.equals(y))
+            {
+                return 0;
+            }
+            
+            // Parse the LSID for hierarchical equivalence tests.
+            Class<? extends IObject> xClass = x.getJavaClass();
+            Class<? extends IObject> yClass = y.getJavaClass();
+            int[] xIndexes = x.getIndexes();
+            int[] yIndexes = y.getIndexes();
+            
+            // Handle the null class (one or more unparsable internal 
+            // references) case.
+            if (xClass == null || yClass == null)
+            {
+                return stringComparator.compare(x.toString(), y.toString()); 
+            }
 
-			// Assign values to the classes
-			int xVal = getValue(xClass, xIndexes.length);
-			int yVal = getValue(yClass, yIndexes.length);
-			
-			int retval = xVal - yVal;
-			if (retval == 0)
-			{
-				// Handle different classes at the same level in the hierarchy
-				// by string difference. They need to still be different.
-				if (!xClass.equals(yClass))
-				{
-					return stringComparator.compare(x.toString(), y.toString());
-				}
-				for (int i = 0; i < xIndexes.length; i++)
-				{
-					int difference = xIndexes[i] - yIndexes[i];
-					if (difference != 0)
-					{
-						return difference;
-					}
-				}
-				return 0;
-			}
-			return retval;
-		}
-		
-		/**
-		 * Assigns a value to a particular class based on its location in the
-		 * OME-XML hierarchy.
-		 * @param klass Class to assign a value to.
-		 * @param indexed Number of class indexes that were present in its LSID.
-		 * @return The value.
-		 */
-		public int getValue(Class<? extends IObject> klass, int indexes)
-		{
-			// Top-level (Pixels is a special case due to Channel and
-			// LogicalChannel containership weirdness).
-			if (klass.equals(Pixels.class))
-			{
-				return 1;
-			}
-			
-			if (klass.equals(DetectorSettings.class) 
-			    || klass.equals(LightSettings.class))
-			{
-			    return 3;
-			}
-			
-			return indexes;
-		}
+            // Assign values to the classes
+            int xVal = getValue(xClass, xIndexes.length);
+            int yVal = getValue(yClass, yIndexes.length);
+            
+            int retval = xVal - yVal;
+            if (retval == 0)
+            {
+                // Handle different classes at the same level in the hierarchy
+                // by string difference. They need to still be different.
+                if (!xClass.equals(yClass))
+                {
+                    return stringComparator.compare(x.toString(), y.toString());
+                }
+                for (int i = 0; i < xIndexes.length; i++)
+                {
+                    int difference = xIndexes[i] - yIndexes[i];
+                    if (difference != 0)
+                    {
+                        return difference;
+                    }
+                }
+                return 0;
+            }
+            return retval;
+        }
+        
+        /**
+         * Assigns a value to a particular class based on its location in the
+         * OME-XML hierarchy.
+         * @param klass Class to assign a value to.
+         * @param indexed Number of class indexes that were present in its LSID.
+         * @return The value.
+         */
+        public int getValue(Class<? extends IObject> klass, int indexes)
+        {
+            // Top-level (Pixels is a special case due to Channel and
+            // LogicalChannel containership weirdness).
+            if (klass.equals(Pixels.class))
+            {
+                return 1;
+            }
+            
+            if (klass.equals(DetectorSettings.class) 
+                || klass.equals(LightSettings.class))
+            {
+                return 3;
+            }
+            
+            return indexes;
+        }
     }
 
     public void setChannelComponentPixels(String arg0, int arg1, int arg2,
@@ -2801,40 +3397,63 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setCircleID(String arg0, int arg1, int arg2, int arg3)
+    private Ellipse getCircle(int imageIndex, int roiIndex, int shapeIndex)
     {
-
-        //
-
+        LinkedHashMap<String, Integer> indexes =
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("imageIndex", imageIndex);
+        indexes.put("roiIndex", roiIndex);
+        indexes.put("shapeIndex", shapeIndex);
+        return getSourceObject(Ellipse.class, indexes);
     }
-
-    public void setCircleCx(String arg0, int arg1, int arg2, int arg3)
+    
+    public void setCircleCx(String cx, int imageIndex, int roiIndex,
+			int shapeIndex)
     {
+    	// XXX: Disabled for now
+    	//Ellipse o = getCircle(imageIndex, roiIndex, shapeIndex);
+    	//o.setCx(toRType(Double.parseDouble(cx)));
+	}
 
-        //
+	public void setCircleCy(String cy, int imageIndex, int roiIndex,
+			int shapeIndex)
+	{
+		// XXX: Disabled for now
+    	//Ellipse o = getCircle(imageIndex, roiIndex, shapeIndex);
+    	//o.setCy(toRType(Double.parseDouble(cy)));
+	}
 
-    }
+	public void setCircleID(String id, int imageIndex, int roiIndex,
+			int shapeIndex)
+	{
+		// XXX: Disabled for now
+    	//checkDuplicateLSID(Ellipse.class, id);
+        //LinkedHashMap<String, Integer> indexes =
+        //	new LinkedHashMap<String, Integer>();
+        //indexes.put("imageIndex", imageIndex);
+        //indexes.put("roiIndex", roiIndex);
+        //indexes.put("shapeIndex", shapeIndex);
+        //IObjectContainer o = getIObjectContainer(Ellipse.class, indexes);
+        //o.LSID = id;
+	}
 
-    public void setCircleCy(String arg0, int arg1, int arg2, int arg3)
-    {
+	public void setCircleR(String r, int imageIndex, int roiIndex,
+			int shapeIndex)
+	{
+		// XXX: Disabled for now
+    	//Ellipse o = getCircle(imageIndex, roiIndex, shapeIndex);
+    	//Double radius = Double.parseDouble(r);
+    	//o.setRx(toRType(radius));
+    	//o.setRy(toRType(radius));
+	}
 
-        //
-
-    }
-
-    public void setCircleR(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setCircleTransform(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
+	public void setCircleTransform(String transform, int imageIndex,
+			int roiIndex, int shapeIndex)
+	{
+		// XXX: Disabled for now
+    	//Ellipse o = getCircle(imageIndex, roiIndex, shapeIndex);
+    	//o.setTransform(toRType(transform));
+	}
 
     public void setContactExperimenter(String arg0, int arg1)
     {
@@ -2892,39 +3511,52 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setDetectorAmplificationGain(Float arg0, int arg1, int arg2)
+    public void setDetectorAmplificationGain(Float amplificationGain,
+    		                                 int instrumentIndex,
+                                             int detectorIndex)
     {
-
-        //
-
+    	Detector o = getDetector(instrumentIndex, detectorIndex);
+    	o.setAmplificationGain(toRType(amplificationGain));
     }
 
-    public void setDetectorZoom(Float arg0, int arg1, int arg2)
+    public void setDetectorZoom(Float zoom, int instrumentIndex,
+    		                    int detectorIndex)
     {
-
-        //
-
+    	Detector o = getDetector(instrumentIndex, detectorIndex);
+    	o.setZoom(toRType(zoom));
     }
 
-    public void setDichroicLotNumber(String arg0, int arg1, int arg2)
+    private Dichroic getDichroic(int instrumentIndex, int dichroicIndex)
+	{
+	    LinkedHashMap<String, Integer> indexes = 
+	    	new LinkedHashMap<String, Integer>();
+	    indexes.put("instrumentIndex", instrumentIndex);
+	    indexes.put("dichroicIndex", dichroicIndex);
+	    return getSourceObject(Dichroic.class, indexes);
+	}
+
+	public void setDichroicLotNumber(String lotNumber,
+                                     int instrumentIndex,
+                                     int dichroicIndex)
     {
-
-        //
-
+    	Dichroic o = getDichroic(instrumentIndex, dichroicIndex);
+    	o.setLotNumber(toRType(lotNumber));
+    }
+    
+    public void setDichroicManufacturer(String manufacturer,
+    		                            int instrumentIndex,
+    		                            int dichroicIndex)
+    {
+    	Dichroic o = getDichroic(instrumentIndex, dichroicIndex);
+    	o.setManufacturer(toRType(manufacturer));
     }
 
-    public void setDichroicManufacturer(String arg0, int arg1, int arg2)
+    public void setDichroicModel(String model,
+                                 int instrumentIndex,
+                                 int dichroicIndex)
     {
-
-        //
-
-    }
-
-    public void setDichroicModel(String arg0, int arg1, int arg2)
-    {
-
-        //
-
+    	Dichroic o = getDichroic(instrumentIndex, dichroicIndex);
+    	o.setModel(toRType(model));
     }
 
     public void setDisplayOptionsDisplay(String arg0, int arg1)
@@ -2974,6 +3606,28 @@ public class OMEROMetadataStoreClient
 
         //
 
+    }
+    
+    private Filter getFilter(int instrumentIndex, int filterIndex)
+    {
+        LinkedHashMap<String, Integer> indexes = 
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("instrumentIndex", instrumentIndex);
+        indexes.put("filterIndex", filterIndex);
+        return getSourceObject(Filter.class, indexes);
+    }
+    
+    private TransmittanceRange getTransmittanceRange(int instrumentIndex,
+    		                                         int filterIndex)
+    {
+    	Filter filter = getFilter(instrumentIndex, filterIndex);
+        TransmittanceRange range = filter.getTransmittanceRange();
+        if (range == null)
+        {
+        	range = new TransmittanceRangeI();
+        	filter.setTransmittanceRange(range);
+        }
+        return range;
     }
 
     public void setEmFilterLotNumber(String arg0, int arg1, int arg2)
@@ -3045,124 +3699,102 @@ public class OMEROMetadataStoreClient
         //
 
     }
-
-    public void setFilterFilterWheel(String arg0, int arg1, int arg2)
+    
+    public void setFilterFilterWheel(String filterWheel, int instrumentIndex,
+    		                         int filterIndex)
     {
-
-        //
-
+    	Filter o = getFilter(instrumentIndex, filterIndex);
+    	o.setFilterWheel(toRType(filterWheel));
     }
 
-    public void setFilterLotNumber(String arg0, int arg1, int arg2)
+    public void setFilterLotNumber(String lotNumber, int instrumentIndex,
+                                   int filterIndex)
     {
-
-        //
-
+    	Filter o = getFilter(instrumentIndex, filterIndex);
+    	o.setLotNumber(toRType(lotNumber));
     }
 
-    public void setFilterManufacturer(String arg0, int arg1, int arg2)
+    public void setFilterManufacturer(String lotNumber, int instrumentIndex,
+                                      int filterIndex)
     {
-
-        //
-
+    	Filter o = getFilter(instrumentIndex, filterIndex);
+    	o.setLotNumber(toRType(lotNumber));
     }
 
-    public void setFilterModel(String arg0, int arg1, int arg2)
+    public void setFilterModel(String model, int instrumentIndex,
+                               int filterIndex)
     {
-
-        //
-
+    	Filter o = getFilter(instrumentIndex, filterIndex);
+    	o.setModel(toRType(model));
+    }
+    
+    private FilterSet getFilterSet(int instrumentIndex,
+    		                       int filterSetIndex)
+    {
+    	LinkedHashMap<String, Integer> indexes = 
+    		new LinkedHashMap<String, Integer>();
+    	indexes.put("instrumentIndex", instrumentIndex);
+    	indexes.put("filterSetIndex", filterSetIndex);
+    	return getSourceObject(FilterSet.class, indexes);
     }
 
-    public void setFilterSetDichroic(String arg0, int arg1, int arg2)
+    public void setFilterSetDichroic(String dichroic, int instrumentIndex,
+    		                         int filterSetIndex)
     {
-
-        //
-
+        LSID key = new LSID(FilterSet.class, instrumentIndex, filterSetIndex);
+        addReference(key, new LSID(dichroic));
     }
 
-    public void setFilterSetEmFilter(String arg0, int arg1, int arg2)
+    public void setFilterSetEmFilter(String emFilter, int instrumentIndex,
+    		                         int filterSetIndex)
     {
-
-        //
-
+    	// XXX: Using this suffix is kind of a gross hack but the reference
+    	// processing logic does not easily handle multiple A --> B or B --> A 
+    	// linkages of the same type so we'll compromise.
+    	// Thu Jul 16 13:34:37 BST 2009 -- Chris Allan <callan@blackcat.ca>
+    	emFilter += OMERO_EMISSION_FILTER_SUFFIX;
+        LSID key = new LSID(FilterSet.class, instrumentIndex, filterSetIndex);
+        addReference(key, new LSID(emFilter));
     }
 
-    public void setFilterSetExFilter(String arg0, int arg1, int arg2)
+    public void setFilterSetExFilter(String exFilter, int instrumentIndex,
+    		                         int filterSetIndex)
     {
-
-        //
-
+    	// XXX: Using this suffix is kind of a gross hack but the reference
+    	// processing logic does not easily handle multiple A --> B or B --> A 
+    	// linkages of the same type so we'll compromise.
+    	// Thu Jul 16 13:34:37 BST 2009 -- Chris Allan <callan@blackcat.ca>
+    	exFilter += OMERO_EXCITATION_FILTER_SUFFIX;
+        LSID key = new LSID(FilterSet.class, instrumentIndex, filterSetIndex);
+        addReference(key, new LSID(exFilter));
     }
 
-    public void setFilterSetLotNumber(String arg0, int arg1, int arg2)
+    public void setFilterSetLotNumber(String lotNumber, int instrumentIndex,
+    		                          int filterSetIndex)
     {
-
-        //
-
+    	FilterSet o = getFilterSet(instrumentIndex, filterSetIndex);
+    	o.setLotNumber(toRType(lotNumber));
     }
 
-    public void setFilterSetManufacturer(String arg0, int arg1, int arg2)
+    public void setFilterSetManufacturer(String manufacturer,
+    		                             int instrumentIndex,
+    		                             int filterSetIndex)
     {
-
-        //
-
+    	FilterSet o = getFilterSet(instrumentIndex, filterSetIndex);
+    	o.setManufacturer(toRType(manufacturer));
     }
 
-    public void setFilterSetModel(String arg0, int arg1, int arg2)
+    public void setFilterSetModel(String model, int instrumentIndex,
+    		                      int filterIndex)
     {
-
-        //
-
+    	Filter o = getFilter(instrumentIndex, filterIndex);
+    	o.setModel(toRType(model));
     }
 
-    public void setFilterType(String arg0, int arg1, int arg2)
+    public void setFilterType(String type, int instrumentIndex, int filterIndex)
     {
-
-        //
-
-    }
-
-    public void setGreyChannelBlackLevel(Float arg0, int arg1)
-    {
-
-        //
-
-    }
-
-    public void setGreyChannelChannelNumber(Integer arg0, int arg1)
-    {
-
-        //
-
-    }
-
-    public void setGreyChannelGamma(Float arg0, int arg1)
-    {
-
-        //
-
-    }
-
-    public void setGreyChannelMapColorMap(String arg0, int arg1)
-    {
-
-        //
-
-    }
-
-    public void setGreyChannelWhiteLevel(Float arg0, int arg1)
-    {
-
-        //
-
-    }
-
-    public void setGreyChannelisOn(Boolean arg0, int arg1)
-    {
-
-        //
-
+    	Filter o = getFilter(instrumentIndex, filterIndex);
+    	o.setType((FilterType) getEnumeration(FilterType.class, type));
     }
 
     public void setGroupName(String arg0, int arg1)
@@ -3200,49 +3832,61 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setImageObjective(String arg0, int arg1)
+    public void setLaserPockelCell(Boolean pockelCell, int instrumentIndex,
+    		                       int lightSourceIndex)
     {
-
-        //
-
+    	Laser o = getLaser(instrumentIndex, lightSourceIndex);
+    	o.setPockelCell(toRType(pockelCell));
     }
 
-    public void setLaserPockelCell(Boolean arg0, int arg1, int arg2)
+    public void setLaserRepetitionRate(Boolean repetitionRate, 
+    		                           int instrumentIndex,
+    		                           int lightSourceIndex)
     {
-
-        //
-
+    	Laser o = getLaser(instrumentIndex, lightSourceIndex);
+    	//o.setRepetitionRate(toRType(repetitionRate));
+    }
+    
+    private LightSettings getLightSettings(int imageIndex,
+    		                               int microbeamManipulationIndex,
+    		                               int lightSourceRefIndex)
+    {
+        LinkedHashMap<String, Integer> indexes = 
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("imageIndex", imageIndex);
+        indexes.put("microbeamManipulationIndex", microbeamManipulationIndex);
+        indexes.put("lightSourceRefIndex", lightSourceRefIndex);
+        return getSourceObject(LightSettings.class, indexes);
     }
 
-    public void setLaserRepetitionRate(Boolean arg0, int arg1, int arg2)
+    public void setLightSourceRefAttenuation(Float attenuation, int imageIndex,
+    		                                 int microbeamManipulationIndex,
+    		                                 int lightSourceRefIndex)
     {
-
-        //
-
+    	LightSettings o = getLightSettings(imageIndex,
+    			                           microbeamManipulationIndex,
+    			                           lightSourceRefIndex);
+    	o.setAttenuation(toRType(attenuation));
     }
 
-    public void setLightSourceRefAttenuation(Float arg0, int arg1, int arg2,
-            int arg3)
+    public void setLightSourceRefLightSource(String lightSource, int imageIndex,
+                                             int microbeamManipulationIndex,
+                                             int lightSourceRefIndex)
     {
-
-        //
-
+        LSID key = new LSID(LightSettings.class, imageIndex,
+                            microbeamManipulationIndex,
+                            lightSourceRefIndex);
+        addReference(key, new LSID(lightSource));
     }
 
-    public void setLightSourceRefLightSource(String arg0, int arg1, int arg2,
-            int arg3)
+    public void setLightSourceRefWavelength(Integer wavelength, int imageIndex,
+                                            int microbeamManipulationIndex,
+                                            int lightSourceRefIndex)
     {
-
-        //
-
-    }
-
-    public void setLightSourceRefWavelength(Integer arg0, int arg1, int arg2,
-            int arg3)
-    {
-
-        //
-
+    	LightSettings o = getLightSettings(imageIndex,
+                                           microbeamManipulationIndex,
+                                           lightSourceRefIndex);
+    	o.setWavelength(toRType(wavelength));
     }
 
     public void setLineID(String arg0, int arg1, int arg2, int arg3)
@@ -3287,128 +3931,150 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setLogicalChannelDetector(String arg0, int arg1, int arg2)
+    public void setLogicalChannelDetector(
+    		String detector, int imageIndex, int logicalChannelIndex)
     {
-
-        //
-
+    	log.warn("Handling legacy LogicalChannel --> Detector reference.");
+    	// Create the non-existant DetectorSettings object; it's unlikely
+    	// we'll ever see method calls associated with it because the Reader
+    	// that called us is likely the OMEXMLReader with a 2003FC OME-XML 
+    	// instance document or OME-TIFF.
+    	getDetectorSettings(imageIndex, logicalChannelIndex);
+    	setDetectorSettingsDetector(detector, imageIndex, logicalChannelIndex);
     }
 
-    public void setLogicalChannelFilterSet(String arg0, int arg1, int arg2)
+    public void setLogicalChannelFilterSet(
+    		String filterSet, int imageIndex, int logicalChannelIndex)
     {
-
-        //
-
+        LSID key = new LSID(LogicalChannel.class, imageIndex,
+                            logicalChannelIndex);
+        addReference(key, new LSID(filterSet));
     }
 
-    public void setLogicalChannelLightSource(String arg0, int arg1, int arg2)
+    public void setLogicalChannelLightSource(
+    		String lightSource, int imageIndex, int logicalChannelIndex)
     {
-
-        //
-
+    	log.warn("Handling legacy LogicalChannel --> LightSource reference.");
+    	// Create the non-existant LightSettings object; it's unlikely
+    	// we'll ever see method calls associated with it because the Reader
+    	// that called us is likely the OMEXMLReader with a 2003FC OME-XML 
+    	// instance document or OME-TIFF.
+    	getLightSettings(imageIndex, logicalChannelIndex);
+    	setLightSourceSettingsLightSource(lightSource, imageIndex,
+    			                          logicalChannelIndex);
     }
 
-    public void setLogicalChannelSecondaryEmissionFilter(String arg0, int arg1,
-            int arg2)
+    public void setLogicalChannelSecondaryEmissionFilter(
+    		String secondaryEmissionFilter, int imageIndex,
+    		int logicalChannelIndex)
     {
-
-        //
-
+    	// XXX: Using this suffix is kind of a gross hack but the reference
+    	// processing logic does not easily handle multiple A --> B or B --> A 
+    	// linkages of the same type so we'll compromise.
+    	// Thu Jul  2 12:08:19 BST 2009 -- Chris Allan <callan@blackcat.ca>
+    	secondaryEmissionFilter += OMERO_EMISSION_FILTER_SUFFIX;
+        LSID key = new LSID(LogicalChannel.class, imageIndex,
+	                        logicalChannelIndex);
+        addReference(key, new LSID(secondaryEmissionFilter));
     }
 
-    public void setLogicalChannelSecondaryExcitationFilter(String arg0,
-            int arg1, int arg2)
+    public void setLogicalChannelSecondaryExcitationFilter(
+    		String secondaryExcitationFilter, int imageIndex,
+    		int logicalChannelIndex)
     {
-
-        //
-
-    }
-
-    public void setMaskID(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskPixelsBigEndian(Boolean arg0, int arg1, int arg2,
-            int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskPixelsBinData(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskPixelsExtendedPixelType(String arg0, int arg1, int arg2,
-            int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskPixelsID(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskPixelsSizeX(Integer arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskPixelsSizeY(Integer arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskHeight(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskTransform(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskWidth(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setMaskX(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
+    	// XXX: Using this suffix is kind of a gross hack but the reference
+    	// processing logic does not easily handle multiple A --> B or B --> A 
+    	// linkages of the same type so we'll compromise.
+    	// Thu Jul  2 12:08:19 BST 2009 -- Chris Allan <callan@blackcat.ca>
+    	secondaryExcitationFilter += OMERO_EXCITATION_FILTER_SUFFIX;
+        LSID key = new LSID(LogicalChannel.class, imageIndex,
+        		            logicalChannelIndex);
+        addReference(key, new LSID(secondaryExcitationFilter));
     }
     
-
-    public void setMaskY(String arg0, int arg1, int arg2, int arg3)
+    public Mask getMask(int imageIndex, int roiIndex, int shapeIndex)
     {
+        LinkedHashMap<String, Integer> indexes =
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("imageIndex", imageIndex);
+        indexes.put("roiIndex", roiIndex);
+        indexes.put("shapeIndex", shapeIndex);
+        return getSourceObject(Mask.class, indexes);
+    }
 
-        //
+    public void setMaskHeight(String height, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//Mask o = getMask(imageIndex, roiIndex, shapeIndex);
+    	//o.setHeight(toRType(Double.parseDouble(height)));
+    }
 
+    public void setMaskID(String id, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//checkDuplicateLSID(Mask.class, id);
+        //LinkedHashMap<String, Integer> indexes =
+        //	new LinkedHashMap<String, Integer>();
+        //indexes.put("imageIndex", imageIndex);
+        //indexes.put("roiIndex", roiIndex);
+        //indexes.put("shapeIndex", shapeIndex);
+        //IObjectContainer o = getIObjectContainer(Mask.class, indexes);
+        //o.LSID = id;
+    }
+
+    public void setMaskTransform(String transform, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//Mask o = getMask(imageIndex, roiIndex, shapeIndex);
+    	//o.setTransform(toRType(transform));
+    }
+
+    public void setMaskWidth(String width, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//Mask o = getMask(imageIndex, roiIndex, shapeIndex);
+    	//o.setWidth(toRType(Double.parseDouble(width)));
+    }
+
+    public void setMaskX(String x, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//Mask o = getMask(imageIndex, roiIndex, shapeIndex);
+    	//o.setX(toRType(Double.parseDouble(x)));
+    }
+
+    public void setMaskY(String y, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//Mask o = getMask(imageIndex, roiIndex, shapeIndex);
+    	//o.setY(toRType(Double.parseDouble(y)));
+    }
+
+    public void setMaskPixelsBigEndian(Boolean bigEndian, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    }
+
+    public void setMaskPixelsBinData(byte[] binData, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    	// XXX: Disabled for now
+    	//Mask o = getMask(imageIndex, roiIndex, shapeIndex);
+    	//o.setBytes(binData);
+    }
+
+    public void setMaskPixelsExtendedPixelType(String extendedPixelType, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    }
+
+    public void setMaskPixelsID(String id, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    }
+
+    public void setMaskPixelsSizeX(Integer sizeX, int imageIndex, int roiIndex, int shapeIndex)
+    {
+    }
+
+    public void setMaskPixelsSizeY(Integer sizeY, int imageIndex, int roiIndex, int shapeIndex)
+    {
     }
 
     public void setMicrobeamManipulationExperimenterRef(String arg0, int arg1,
@@ -3439,40 +4105,48 @@ public class OMEROMetadataStoreClient
         //
 
     }
-
-    public void setMicroscopeID(String arg0, int arg1)
+    
+    private Microscope getMicroscope(int instrumentIndex)
     {
-
-        //
-
+    	Instrument instrument = getInstrument(instrumentIndex);
+    	Microscope microscope = instrument.getMicroscope();
+    	if (microscope == null)
+    	{
+    		microscope = new MicroscopeI();
+    		instrument.setMicroscope(microscope);
+    	}
+    	return microscope;
     }
 
-    public void setMicroscopeManufacturer(String arg0, int arg1)
+    public void setMicroscopeID(String id, int instrumentIndex)
     {
-
-        //
-
+    	// TODO: Not in model, etc.
     }
 
-    public void setMicroscopeModel(String arg0, int arg1)
+    public void setMicroscopeManufacturer(String manufacturer,
+    		                              int instrumentIndex)
     {
-
-        //
-
+    	Microscope o = getMicroscope(instrumentIndex);
+    	o.setManufacturer(toRType(manufacturer));
     }
 
-    public void setMicroscopeSerialNumber(String arg0, int arg1)
+    public void setMicroscopeModel(String model, int instrumentIndex)
     {
-
-        //
-
+    	Microscope o = getMicroscope(instrumentIndex);
+    	o.setModel(toRType(model));
     }
 
-    public void setMicroscopeType(String arg0, int arg1)
+    public void setMicroscopeSerialNumber(String serialNumber,
+    		                              int instrumentIndex)
     {
+    	Microscope o = getMicroscope(instrumentIndex);
+    	o.setSerialNumber(toRType(serialNumber));
+    }
 
-        //
-
+    public void setMicroscopeType(String type, int instrumentIndex)
+    {
+    	Microscope o = getMicroscope(instrumentIndex);
+    	o.setType((MicroscopeType) getEnumeration(MicroscopeType.class, type));
     }
 
     public void setOTFBinaryFile(String arg0, int arg1, int arg2)
@@ -3629,11 +4303,12 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setPumpLightSource(String arg0, int arg1, int arg2)
+    public void setPumpLightSource(String lightSource, int instrumentIndex,
+    		                       int lightSourceIndex)
     {
-
-        //
-
+        LSID key = new LSID(LightSource.class, instrumentIndex,
+        		            lightSourceIndex);
+        addReference(key, new LSID(lightSource));
     }
 
     public void setROIRefID(String arg0, int arg1, int arg2, int arg3)
@@ -3706,41 +4381,27 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setScreenDescription(String arg0, int arg1)
+    public void setScreenDescription(String description, int screenIndex)
     {
-
-        //
-
+    	//Screen o = getScreen(screenIndex);
+    	//o.setDescription(toRType(description));
+    	// Disabled
     }
 
-    public void setScreenExtern(String arg0, int arg1)
+    public void setScreenExtern(String extern, int screenIndex)
     {
-
-        //
-
+    	//
     }
 
-    public void setScreenReagentSetIdentifier(String arg0, int arg1)
+    public void setScreenReagentSetIdentifier(String reagentSetIdentifier,
+    		                                  int screenIndex)
     {
-
+    	//Screen o = getScreen(screenIndex);
+    	//o.setReagentSetIdentifier(toRType(reagentSetIdentifier));
+    	// Disabled
     }
 
     public void setScreenRefID(String arg0, int arg1, int arg2)
-    {
-
-    }
-
-    public void setShapeID(String arg0, int arg1, int arg2, int arg3)
-    {
-
-    }
-
-    public void setShapeTheT(Integer arg0, int arg1, int arg2, int arg3)
-    {
-
-    }
-
-    public void setShapeTheZ(Integer arg0, int arg1, int arg2, int arg3)
     {
 
     }
@@ -3760,69 +4421,94 @@ public class OMEROMetadataStoreClient
 
     }
 
-    public void setTransmittanceRangeCutIn(Integer arg0, int arg1, int arg2)
+    public void setTransmittanceRangeCutIn(Integer cutIn, int instrumentIndex,
+    		                               int filterIndex)
     {
-
+    	TransmittanceRange o = getTransmittanceRange(instrumentIndex,
+                                                     filterIndex);
+        o.setCutIn(toRType(cutIn));
     }
 
-    public void setTransmittanceRangeCutInTolerance(Integer arg0, int arg1,
-            int arg2)
+    public void setTransmittanceRangeCutInTolerance(Integer cutInTolerance,
+    		                                        int instrumentIndex,
+    		                                        int filterIndex)
     {
-
+    	TransmittanceRange o = getTransmittanceRange(instrumentIndex,
+                                                     filterIndex);
+    	o.setCutInTolerance(toRType(cutInTolerance));
     }
 
-    public void setTransmittanceRangeCutOut(Integer arg0, int arg1, int arg2)
+    public void setTransmittanceRangeCutOut(Integer cutOut, 
+    		                                int instrumentIndex,
+    		                                int filterIndex)
     {
-
+    	TransmittanceRange o = getTransmittanceRange(instrumentIndex,
+                                                     filterIndex);
+    	o.setCutOut(toRType(cutOut));
     }
 
-    public void setTransmittanceRangeCutOutTolerance(Integer arg0, int arg1,
-            int arg2)
+    public void setTransmittanceRangeCutOutTolerance(Integer cutOutTolerance,
+    		                                         int instrumentIndex,
+    		                                         int filterIndex)
     {
-
+    	TransmittanceRange o = getTransmittanceRange(instrumentIndex,
+                                                     filterIndex);
+    	o.setCutOutTolerance(toRType(cutOutTolerance));
     }
 
-    public void setTransmittanceRangeTransmittance(Integer arg0, int arg1,
-            int arg2)
+    public void setTransmittanceRangeTransmittance(Integer transmittance,
+    		                                       int instrumentIndex,
+    		                                       int filterIndex)
     {
-
+    	TransmittanceRange o = getTransmittanceRange(instrumentIndex,
+    			                                     filterIndex);
+    	// TODO: Hack, model has integer, database has double
+    	o.setTransmittance(toRType(new Double(transmittance)));
     }
 
     public void setWellReagent(String reagent, int plateIndex, int wellIndex)
     {
         LSID key = new LSID(Well.class, plateIndex, wellIndex);
-        referenceCache.put(key, new LSID(reagent));
+        addReference(key, new LSID(reagent));
     }
 
     public void setWellSampleImageRef(String image, int plateIndex, 
             int wellIndex, int wellSampleIndex)
     {
-        LSID key = new LSID(WellSample.class, plateIndex, wellIndex, wellSampleIndex);
-        referenceCache.put(key, new LSID(image));
+        LSID key = new LSID(WellSample.class, plateIndex,
+        		            wellIndex, wellSampleIndex);
+        addReference(key, new LSID(image));
     }
 
     public void setWellSampleRefID(String arg0, int arg1, int arg2, int arg3)
     {
-
+    	//
     }
 
-    public void setPlateColumnNamingConvention(String arg0, int arg1)
+    public void setPlateColumnNamingConvention(String columnNamingConvention,
+    		                                   int plateIndex)
     {
-
+        Plate o = getPlate(plateIndex);
+        o.setColumnNamingConvention(toRType(columnNamingConvention));
     }
 
-    public void setPlateRowNamingConvention(String arg0, int arg1)
+    public void setPlateRowNamingConvention(String rowNamingConvention,
+    		                                int plateIndex)
     {
+        Plate o = getPlate(plateIndex);
+        o.setRowNamingConvention(toRType(rowNamingConvention));
     }
 
-    public void setPlateWellOriginX(Double arg0, int arg1)
+    public void setPlateWellOriginX(Double wellOriginX, int plateIndex)
     {
-
+        Plate o = getPlate(plateIndex);
+        o.setWellOriginX(toRType(wellOriginX));
     }
 
-    public void setPlateWellOriginY(Double arg0, int arg1)
+    public void setPlateWellOriginY(Double wellOriginY, int plateIndex)
     {
-
+        Plate o = getPlate(plateIndex);
+        o.setWellOriginX(toRType(wellOriginY));
     }
 
     public void setPathD(String arg0, int arg1, int arg2, int arg3)
@@ -3838,221 +4524,158 @@ public class OMEROMetadataStoreClient
         //
 
     }
-
-    public void setShapeBaselineShift(String arg0, int arg1, int arg2, int arg3)
+    
+    private Shape getShape(int imageIndex, int roiIndex, int shapeIndex)
     {
-
-        //
-
-    }
-
-    public void setShapeDirection(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFillColor(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFillOpacity(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFillRule(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFontFamily(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFontSize(Integer arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFontStretch(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFontStyle(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFontVariant(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeFontWeight(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeG(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeGlyphOrientationVertical(Integer arg0, int arg1,
-            int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeLocked(Boolean arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeAttribute(String arg0, int arg1, int arg2,
-            int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeColor(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeDashArray(String arg0, int arg1, int arg2,
-            int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeLineCap(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeLineJoin(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeMiterLimit(Integer arg0, int arg1, int arg2,
-            int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeOpacity(Float arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeStrokeWidth(Integer arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeText(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeTextAnchor(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeTextDecoration(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeTextFill(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeTextStroke(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeVectorEffect(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeVisibility(Boolean arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
-    }
-
-    public void setShapeWritingMode(String arg0, int arg1, int arg2, int arg3)
-    {
-
-        //
-
+        LinkedHashMap<String, Integer> indexes =
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("imageIndex", imageIndex);
+        indexes.put("roiIndex", roiIndex);
+        indexes.put("shapeIndex", shapeIndex);
+        return getSourceObject(Shape.class, indexes);
     }
     
+    public void setShapeBaselineShift(String baselineShift, int imageIndex,
+			int roiIndex, int shapeIndex)
+    {
+	}
+
+	public void setShapeDirection(String direction, int imageIndex,
+			int roiIndex, int shapeIndex)
+	{
+	}
+
+	public void setShapeFillColor(String fillColor, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFillOpacity(String fillOpacity, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFillRule(String fillRule, int imageIndex, int roiIndex,
+			int shapeIndex) {
+	}
+
+	public void setShapeFontFamily(String fontFamily, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFontSize(Integer fontSize, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFontStretch(String fontStretch, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFontStyle(String fontStyle, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFontVariant(String fontVariant, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeFontWeight(String fontWeight, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeG(String g, int imageIndex, int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeGlyphOrientationVertical(
+			Integer glyphOrientationVertical, int imageIndex, int roiIndex,
+			int shapeIndex) {
+	}
+
+	public void setShapeID(String id, int imageIndex, int roiIndex,
+			int shapeIndex) {
+	}
+
+	public void setShapeLocked(Boolean locked, int imageIndex, int roiIndex,
+			int shapeIndex) {
+	}
+
+	public void setShapeStrokeAttribute(String strokeAttribute, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeColor(String strokeColor, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeDashArray(String strokeDashArray, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeLineCap(String strokeLineCap, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeLineJoin(String strokeLineJoin, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeMiterLimit(Integer strokeMiterLimit,
+			int imageIndex, int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeOpacity(Float strokeOpacity, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeStrokeWidth(Integer strokeWidth, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeText(String text, int imageIndex, int roiIndex,
+			int shapeIndex) {
+	}
+
+	public void setShapeTextAnchor(String textAnchor, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeTextDecoration(String textDecoration, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeTextFill(String textFill, int imageIndex, int roiIndex,
+			int shapeIndex) {
+	}
+
+	public void setShapeTextStroke(String textStroke, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeTheT(Integer theT, int imageIndex, int roiIndex,
+			int shapeIndex) {
+		// XXx: Disabled for now
+		//Shape o = getShape(imageIndex, roiIndex, shapeIndex);
+		//o.setTheT(toRType(theT));
+	}
+
+	public void setShapeTheZ(Integer theZ, int imageIndex, int roiIndex,
+			int shapeIndex) {
+		// XXX: Disabled for now
+		//Shape o = getShape(imageIndex, roiIndex, shapeIndex);
+		//o.setTheZ(toRType(theZ));
+	}
+
+	public void setShapeVectorEffect(String vectorEffect, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeVisibility(Boolean visibility, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+	public void setShapeWritingMode(String writingMode, int imageIndex,
+			int roiIndex, int shapeIndex) {
+	}
+
+
    /*-----------*/
     
     public class SortProjectsByName implements Comparator<Project>{
@@ -4069,4 +4692,120 @@ public class OMEROMetadataStoreClient
             return o1.getName().getValue().compareTo(o2.getName().getValue());
         }
      }
+    
+
+    /**
+     * Based on immmersion table bug in 4.0 this is a hack to fix in code those enums missing/broken
+     * 
+     *  replace l1[0:3] (['Gly', 'Hl', 'Oel']) l2[0:3] (['Air', 'Glycerol', 'Multi'])
+     *  insert l1[4:4] ([]) l2[4:5] (['Other'])
+     *   delete l1[5:6] (['Wasser']) l2[6:6] ([])
+     *  replace l1[7:8] (['Wl']) l2[7:8] (['WaterDipping'])
+     */
+    private void checkImmersions()
+    {   
+        String[] immersionAddStrings = {"Air", "Glycerol", "Multi", "WaterDipping", "Other"};
+        List<String> immersionAdds = Arrays.asList(immersionAddStrings);
+        
+        String[] immersionDeleteStrings = {"Gly", "Hl", "Oel", "Wasser", "Wl"};
+        List<String> immersionDeletes = Arrays.asList(immersionDeleteStrings);
+        
+        try
+        {
+            ITypesPrx types = serviceFactory.getTypesService();
+            List<IObject> immersionList = types.allEnumerations("omero.model.Immersion");
+            List<String> immersionStrings = new ArrayList<String>();
+            
+            for (IObject immersion: immersionList)
+            {
+                Immersion immersion2 = (Immersion) immersion;
+                immersionStrings.add(immersion2.getValue().getValue());
+                log.info("Found immersion: " + immersion2.getValue().getValue());
+            }
+            
+            for (String i: immersionAdds)
+            {
+                if (!immersionStrings.contains(i))
+                {
+                    Immersion immersion  = new ImmersionI();
+                    immersion.setValue(rstring(i));
+                    //types.createEnumeration(immersion);
+                    log.info("Adding missing immersion: " + i);
+                }
+
+            }
+            
+            for (String i: immersionDeletes)
+            {
+                int index = immersionStrings.indexOf(i);
+                
+                if (index != -1)
+                {
+                    //types.deleteEnumeration(immersionList.get(index));
+                    log.info("Deleting bad immersion: " + i);
+                }
+            }
+            
+        } catch (ServerError e)
+        {
+            log.error("checkImmersions() failure", e);
+        }
+    }
+
+	public void setDichroicID(String id, int instrumentIndex, int dichroicIndex)
+	{
+		checkDuplicateLSID(Dichroic.class, id);
+        LinkedHashMap<String, Integer> indexes = 
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("instrumentIndex", instrumentIndex);
+        indexes.put("dichroicIndex", dichroicIndex);
+        IObjectContainer o = getIObjectContainer(Dichroic.class, indexes);
+        o.LSID = id;
+        addAuthoritativeContainer(Dichroic.class, id, o);
+	}
+
+	public void setFilterID(String id, int instrumentIndex, int filterIndex)
+	{
+		checkDuplicateLSID(Filter.class, id);
+        LinkedHashMap<String, Integer> indexes = 
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("instrumentIndex", instrumentIndex);
+        indexes.put("filterIndex", filterIndex);
+        IObjectContainer o = getIObjectContainer(Filter.class, indexes);
+        o.LSID = id;
+        addAuthoritativeContainer(Filter.class, id, o);
+	}
+
+	public void setFilterSetID(String id, int instrumentIndex,
+			                   int filterSetIndex)
+	{
+		checkDuplicateLSID(FilterSet.class, id);
+        LinkedHashMap<String, Integer> indexes = 
+        	new LinkedHashMap<String, Integer>();
+        indexes.put("instrumentIndex", instrumentIndex);
+        indexes.put("filterSetIndex", filterSetIndex);
+        IObjectContainer o = getIObjectContainer(FilterSet.class, indexes);
+        o.LSID = id;
+        addAuthoritativeContainer(FilterSet.class, id, o);
+	}
+
+	public void setRoiLinkDirection(String arg0, int arg1, int arg2, int arg3) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	public void setRoiLinkName(String arg0, int arg1, int arg2, int arg3) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	public void setRoiLinkRef(String arg0, int arg1, int arg2, int arg3) {
+		// TODO Auto-generated method stub
+		
+	}
+	
+        public void setGroupID(String arg0, int arg1) {
+		// TODO Auto-generated method stub
+		
+	}
 }

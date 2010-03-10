@@ -23,83 +23,17 @@
 #
 
 import sys
-
-
-#
-# Ice handling: When manage.py is called by icegridnode
-# an extra argument "--Ice.Config=..." is added. For now,
-# it must be stripped out.
-#
-while True:
-    for i in range(0, len(sys.argv)):
-        if sys.argv[i].startswith("--Ice.Config"):
-            sys.argv.pop(i)
-        continue
-    break
-
+import logging
 
 from django.core.management import execute_manager
+
+logger = logging.getLogger('manage')
 
 try:
     import settings # Assumed to be in the same directory.
 except ImportError:
     sys.stderr.write("Error: Can't find the file 'settings.py' in the directory containing %r. It appears you've customized things.\nYou'll have to run django-admin.py, passing it your settings module.\n(If the file settings.py does indeed exist, it's causing an ImportError somehow.)\n" % __file__)
     sys.exit(1)
-
-import os
-import logging
-import logging.handlers
-
-try:
-    LOGDIR = settings.LOGDIR
-except:
-    LOGDIR = os.path.dirname(__file__).replace('\\','/')
-
-LOGFILE = ('OMEROweb.log')
-logging.basicConfig(level=logging.INFO,
-                format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-                datefmt='%a, %d %b %Y %H:%M:%S',
-                filename=os.path.join(LOGDIR, LOGFILE),
-                filemode='w')
-
-fileLog = logging.handlers.TimedRotatingFileHandler(os.path.join(LOGDIR, LOGFILE),'midnight',1)
-
-# Windows will not allow renaming (or deleting) a file that's open. 
-# There's nothing the logging package can do about that.
-try:
-    sys.getwindowsversion()
-except:
-    fileLog.doRollover()
-
-fileLog.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s %(name)-12s: %(levelname)-8s %(message)s')
-fileLog.setFormatter(formatter)
-logging.getLogger().addHandler(fileLog)
-
-logger = logging.getLogger()
-
-# upgrade check:
-# -------------
-# On each startup OMERO.web checks for possible server upgrades
-# and logs the upgrade url at the WARNING level. If you would
-# like to disable the checks, change the following to
-#
-#   if False:
-#
-# For more information, see
-# http://trac.openmicroscopy.org.uk/omero/wiki/UpgradeCheck
-#
-try:
-    from omero.util.upgrade_check import UpgradeCheck
-    check = UpgradeCheck("web")
-    check.run()
-    if check.isUpgradeNeeded():
-        logger.error("Upgrade is available. Please visit http://trac.openmicroscopy.org.uk/omero/wiki/MilestoneDownloads.\n")
-except Exception, x:
-    logger.error("Upgrade check error: %s" % x)
-
-if not settings.EMAIL_NOTIFICATION:
-    logger.error("Settings.py has not been configured. EmailServerError: The application will not send any emails. Sharing notification is not available.\n" )
 
 if __name__ == "__main__":
     logger = logging.getLogger()

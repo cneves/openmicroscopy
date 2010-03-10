@@ -32,7 +32,7 @@ import org.springframework.jndi.JndiObjectTargetSource;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.more@gmx.de"> josh.moore@gmx.de</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 2731 $ $Date: 2008-08-19 20:23:29 +0100 (Tue, 19 Aug 2008) $) </small>
  * @since OME3.0
  * @see ome.client.Session#register(IObject)
  */

@@ -33,7 +33,7 @@ import ome.parameters.QueryParameter;
  * {@link ome.services.query.Query#Query(Definitions, Parameters) Query constructor.}
  * 
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 3997 $ $Date: 2009-03-11 15:06:04 +0000 (Wed, 11 Mar 2009) $) </small>
  * @since OMERO 3.0
  */
 public class QueryParameterDef {

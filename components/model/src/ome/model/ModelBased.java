@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ModelBased.java 1998 2008-01-04 14:14:57Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -27,7 +27,7 @@ import ome.util.ReverseModelMapper;
  * 
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 2.5 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 2.5 <small> (<b>Internal version:</b> $Rev: 1998 $ $Date: 2008-01-04 14:14:57 +0000 (Fri, 04 Jan 2008) $) </small>
  * @since 2.5
  * @see ome.util.ModelMapper
  * @see ome.util.ReverseModelMapper

@@ -3,7 +3,7 @@
 <!--
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# $Id$
+# $Id: global.xml 5878 2009-11-25 08:40:37Z jmoore $
 #
 # Copyright 2006 University of Dundee. All rights reserved.
 # Use is subject to license terms supplied in LICENSE.txt
@@ -65,6 +65,31 @@
 
         <!-- Post-import properties -->
         <property name="sql.dir"  value="${omero.home}/sql/${omero.db.profile}/${omero.db.version}__${omero.db.patch}"/>
+
+        <!-- Now we've taken from the environment, and from the files
+             try to find ICE_HOME ourselves -->
+        <condition property="ice.home" value="C:\Ice-3.3.1">
+            <available file="C:\Ice-3.3.1"/>
+        </condition>
+        <condition property="ice.home" value="C:\Ice-3.3.1-VC90">
+            <available file="C:\Ice-3.3.1-VC90"/>
+        </condition>
+        <condition property="ice.home" value="C:\Ice-3.3.0">
+            <available file="C:\Ice-3.3.0"/>
+        </condition>
+        <condition property="ice.home" value="C:\Ice-3.3.0-VC90">
+            <available file="C:\Ice-3.3.0-VC90"/>
+        </condition>
+        <condition property="ice.home" value="/opt/Ice-3.3">
+            <available file="/opt/Ice-3.3"/>
+        </condition>
+        <condition property="ice.home" value="/opt/Ice-3.3.1">
+            <available file="/opt/Ice-3.3.1"/>
+        </condition>
+        <condition property="ice.home" value="/opt/Ice-3.3.0">
+            <available file="/opt/Ice-3.3.0"/>
+        </condition>
+        <property name="ice.home" value="/usr/share/Ice"/>
 
         <!--
           The idea for this macro is taken from maven2. Use deps-buildlist
@@ -155,18 +180,30 @@
             </sequential>
         </macrodef>
 
+        <path id="scons.python.path">
+            <pathelement path="${env.PYTHONPATH}"/>
+            <pathelement location="${OmeroPy.comp}/src"/><!-- For which.py on cleanup -->
+        </path>
+
+        <pathconvert property="scons.PYTHONPATH" refid="scons.python.path"/>
+
         <macrodef name="scons_py" description="Scons build tool installed under omero.home/target">
             <attribute name="dir" default="${basedir}"/>
             <attribute name="failonerror" default="true"/>
             <element name="args" implicit="yes"/>
             <sequential>
+                <property name="env.ARCH" value="detect"/>
+                <property name="env.RELEASE" value="debug"/>
                 <echo>Building with ICE_HOME=${ice.home}</echo>
                 <exec executable="python" dir="@{dir}" failonerror="@{failonerror}">
+                    <env key="PYTHONPATH" value="${scons.PYTHONPATH}"/>
                     <env key="ICE_HOME" value="${ice.home}"/>
                     <arg value="${omero.home}/target/scons/scons.py"/>
                     <arg value="-Q"/>
                     <arg value="-j"/>
                     <arg value="${env.J}"/>
+                    <arg value="--arch=${env.ARCH}"/>
+                    <arg value="--release=${env.RELEASE}"/>
                     <args/>
                 </exec>
             </sequential>

@@ -27,7 +27,7 @@ import ome.system.ServiceFactory;
  * 
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 2640 $ $Date: 2008-07-30 21:58:39 +0100 (Wed, 30 Jul 2008) $) </small>
  * @since 1.0
  */
 public class ManagedServiceFactory extends ServiceFactory implements

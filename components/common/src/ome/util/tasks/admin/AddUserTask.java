@@ -43,12 +43,12 @@ import static ome.util.tasks.admin.AddUserTask.Keys.*;
  * this.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1681 $, $Date: 2007-06-27 10:13:28 +0100 (Wed, 27 Jun 2007) $
  * @see AdminTask
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-06-27 10:13:28 +0100 (Wed, 27 Jun 2007) $")
+@RevisionNumber("$Revision: 1681 $")
 public class AddUserTask extends AdminTask {
 
     /**

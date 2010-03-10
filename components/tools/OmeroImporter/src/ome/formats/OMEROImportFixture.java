@@ -11,10 +11,13 @@ import java.io.File;
 import java.util.List;
 
 import loci.formats.FormatReader;
-import ome.conditions.ApiUsageException;
-import ome.formats.importer.ImportFixture;
+import ome.formats.importer.IObservable;
+import ome.formats.importer.ImportCandidates;
+import ome.formats.importer.ImportConfig;
+import ome.formats.importer.ImportEvent;
 import ome.formats.importer.ImportLibrary;
 import ome.formats.importer.OMEROWrapper;
+import ome.formats.importer.cli.ErrorHandler;
 import omero.model.Pixels;
 
 import org.apache.commons.logging.Log;
@@ -57,10 +60,6 @@ public class OMEROImportFixture {
     private List<Pixels> pixels;
 
     private String name;
-
-    public OMEROImportFixture(OMEROMetadataStoreClient store) {
-        this(store, new OMEROWrapper());
-    }
 
     public OMEROImportFixture(OMEROMetadataStoreClient store,
             OMEROWrapper reader) {
@@ -126,29 +125,21 @@ public class OMEROImportFixture {
      *            an action to take per plane. not null.
      * @throws Exception
      */
-    public void doImport(ImportLibrary.Step step) throws Exception {
-        if (step == null) {
-            throw new ApiUsageException("Step may not be null.");
-        }
-        String fileName = file.getAbsolutePath();
-        library.setTarget(null);
-        pixels = library.importImage(file, 0, 0, 1, fileName, null, false, null);
-    }
-
-    /**
-     * runs import via
-     * {@link #doImport(ome.formats.testclient.ImportLibrary.Step)} with an
-     * empty {@link ImportLibrary.Step#step(int)} action.
-     * 
-     * @throws Exception
-     */
     public void doImport() throws Exception {
-        doImport(new ImportLibrary.Step() {
-
+        String fileName = file.getAbsolutePath();
+        ImportConfig config = new ImportConfig();
+        ErrorHandler handler = new ErrorHandler(config) {
             @Override
-            public void step(int series, int n) {
+            public void onUpdate(IObservable importLibrary, ImportEvent event) {
+                super.onUpdate(importLibrary, event);
+                if (event instanceof ImportEvent.IMPORT_DONE) {
+                    pixels = ((ImportEvent.IMPORT_DONE) event).pixels;
+                }
             }
-        });
+        };
+        ImportCandidates candidates = new ImportCandidates(reader, new String[]{fileName}, handler);
+        library.addObserver(handler);
+        library.importCandidates(config, candidates);
     }
 
     public void setFile(File file) {

@@ -12,8 +12,13 @@ package omeis.providers.re;
 // Third-party libraries
 
 // Application-internal dependencies
+import ome.model.acquisition.Filter;
+import ome.model.acquisition.Laser;
+import ome.model.acquisition.LightSource;
+import ome.model.acquisition.TransmittanceRange;
 import ome.model.core.Channel;
 import ome.model.core.LogicalChannel;
+
 
 /**
  * Utility class to determine the color usually associated to a specified
@@ -24,11 +29,12 @@ import ome.model.core.LogicalChannel;
  * @author <br>
  *         Andrea Falconi &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:a.falconi@dundee.ac.uk"> a.falconi@dundee.ac.uk</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 5462 $ $Date:
  *          2005/07/05 16:13:52 $) </small>
  * @since OME2.2
  */
 public class ColorsFactory {
+	
     /** Index of the red component of a color. */
     public static final int RED_INDEX = 0;
     
@@ -45,122 +51,221 @@ public class ColorsFactory {
     static final int DEFAULT_ALPHA = 255;
 
     /**
-     * Lower bound of the emission wavelength interval corresponding to a
+     * Lower bound of the wavelength interval corresponding to a
      * <code>BLUE</code> color.
      */
     private static final int BLUE_MIN = 400;
 
     /**
-     * Upper bound of the emission wavelength interval corresponding to a
+     * Upper bound of the wavelength interval corresponding to a
      * <code>BLUE</code> color.
      */
     private static final int BLUE_MAX = 500;
 
     /**
-     * Lower bound of the emission wavelength interval corresponding to a
+     * Lower bound of the wavelength interval corresponding to a
      * <code>GREEN</code> color.
      */
     private static final int GREEN_MIN = 501;
 
     /**
-     * Upper bound of the emission wavelength interval corresponding to a
+     * Upper bound of the wavelength interval corresponding to a
      * <code>GREEN</code> color.
      */
-    private static final int GREEN_MAX = 600;
+    private static final int GREEN_MAX = 559;//600;
 
     /**
-     * Lower bound of the emission wavelength interval corresponding to a
+     * Lower bound of the wavelength interval corresponding to a
      * <code>RED</code> color.
      */
-    private static final int RED_MIN = 601;
+    private static final int RED_MIN = 560;//601;
 
     /**
-     * Upper bound of the emission wavelength interval corresponding to a
+     * Upper bound of the wavelength interval corresponding to a
      * <code>RED</code> color.
      */
     private static final int RED_MAX = 700;
 
     /**
-     * Returns <code>true</code> if the emission wavelength is in the blue
+     * Returns <code>true</code> if the wavelength is in the blue
      * color band, <code>false</code> otherwise.
      * 
-     * @param emWavelenght
-     *            The value of the emission wavelength.
+     * @param wavelength The wavelength to handle.
      * @return See above.
      */
-    private static boolean rangeBlue(int emWavelenght) {
-        return emWavelenght <= BLUE_MAX && emWavelenght >= BLUE_MIN;
+    private static boolean rangeBlue(int wavelength) {
+        return wavelength <= BLUE_MAX;// && wavelength >= BLUE_MIN;
     }
 
     /**
-     * Returns <code>true</code> if the emission wavelength is in the green
+     * Returns <code>true</code> if the wavelength is in the green
      * color band, <code>false</code> otherwise.
      * 
-     * @param emWave
-     *            The value of the emission wavelength.
+     * @param wavelength The wavelength to handle.
      * @return See above.
      */
-    private static boolean rangeGreen(int emWave) {
-        return emWave >= GREEN_MIN && emWave <= GREEN_MAX;
+    private static boolean rangeGreen(int wavelength) {
+        return wavelength >= GREEN_MIN && wavelength <= GREEN_MAX;
     }
 
     /**
-     * Returns <code>true</code> if the emission wavelength is in the red
+     * Returns <code>true</code> if the wavelength is in the red
      * color band, <code>false</code> otherwise.
      * 
-     * @param emWave
-     *            The value of the emission wavelength.
+     * @param wavelength The wavelength to handle.
      * @return See above.
      */
-    private static boolean rangeRed(int emWave) {
-        return emWave >= RED_MIN && emWave <= RED_MAX;
+    private static boolean rangeRed(int wavelength) {
+        return wavelength >= RED_MIN;//&& wavelength <= RED_MAX;
     }
 
     /**
-     * Determines the color usually associated to the specified emission
+     * Returns <code>true</code> if the channel has emission and/or excitation
+     * information, <code>false</code> otherwise.
+     * 
+     * @param lc   The channel to handle.
+     * @param full Pass <code>true</code> to check emission and excitation,
+     * 			   <code>false</code> to only check emission.
+     * @return See above.
+     */
+    private static boolean hasEmissionExcitationData(LogicalChannel lc, 
+    		boolean full)
+    {
+    	if (lc == null) return false;
+    	if (lc.getEmissionWave() != null) return true;
+    	if (lc.getFilterSet() != null) {
+    		Filter f = lc.getFilterSet().getEmFilter();
+        	if (isFilterHasEmissionData(f)) return true;
+    	}
+    	if (isFilterHasEmissionData(lc.getSecondaryEmissionFilter()))
+    		return true;
+    	
+    	if (!full) return false;
+    	//Excitation
+    	//Laser
+    	if (lc.getLightSourceSettings() != null) {
+    		LightSource src = lc.getLightSourceSettings().getLightSource();
+    		if (src instanceof Laser) {
+    			Laser laser = (Laser) src;
+    			if (laser.getWavelength() != null) return true;
+    		}
+    	}
+    	if (lc.getExcitationWave() != null) return true;
+    	if (lc.getFilterSet() != null) {
+    		Filter f = lc.getFilterSet().getExFilter();
+        	if (isFilterHasEmissionData(f)) return true;
+    	}
+    	return isFilterHasEmissionData(lc.getSecondaryExcitationFilter());
+    }
+    
+    /**
+     * Determines the color usually associated to the specified
      * wavelength or explicitly defined for a particular channel.
      * 
      * @param channel The channel to determine the color for.
+     * @param lc	  The logical channel associated to that channel.
      * @return An RGBA array representation of the color.
      */
-    private static int[] getColor(Channel channel) {
-    	LogicalChannel lc = channel.getLogicalChannel();
+    private static int[] getColor(Channel channel, LogicalChannel lc) {
     	if (lc == null) return null;
-        Integer emWave = lc.getEmissionWave();
-        
-        Integer red = channel.getRed();
-        Integer green = channel.getGreen();
-        Integer blue = channel.getBlue();
-        Integer alpha = channel.getAlpha();
-        if (red != null && green != null && blue != null && alpha != null) {
-        	// We've got a color image of some type that has explicitly
-        	// specified which channel is Red, Green, Blue or some other wacky
-        	// color.
-            return new int[] { red, green, blue, alpha };
-        }
-
-        if (emWave == null)
-        {
+    	if (!hasEmissionExcitationData(lc, true)) {
+    		Integer red = channel.getRed();
+            Integer green = channel.getGreen();
+            Integer blue = channel.getBlue();
+            Integer alpha = channel.getAlpha();
+            if (red != null && green != null && blue != null && alpha != null) {
+            	// We've got a color image of some type that has explicitly
+            	// specified which channel is Red, Green, Blue or some other wacky
+            	// color.
+            	//if (red == 0 && green == 0 && blue == 0 && alpha == 0)
+            	//	alpha = DEFAULT_ALPHA;
+                return new int[] { red, green, blue, alpha };
+            }
             return null;
-        }
-        if (rangeBlue(emWave))
-        {
-            return newBlueColor();
-        }
-        if (rangeGreen(emWave))
-        {
-            return newGreenColor();
-        }
-        if (rangeRed(emWave))
-        {
-            return newRedColor();
-        }
-        return null;
-    }
+    	}
+    	Integer value = lc.getEmissionWave();
+        //First we check the emission wavelength.
+        if (value != null) return determineColor(value);
+        
+        //First check the emission filter.
+    	//First check if filter
+       
+    	if (lc.getFilterSet() != null)
+    		value = getValueFromFilter(lc.getFilterSet().getEmFilter());
+    	//nothing so we check the secondary filter
+    	if (value == null) 
+    		value = getValueFromFilter(lc.getSecondaryEmissionFilter());
+    
+    	//Laser
+    	if (value == null && lc.getLightSourceSettings() != null) {
+    		LightSource ls = lc.getLightSourceSettings().getLightSource();
+    		if (ls instanceof Laser) value = ((Laser) ls).getWavelength();
+    	}
+    	if (value != null) return determineColor(value);
+    	
+    	//Excitation
+    	value = lc.getExcitationWave();
+    	if (value != null) return determineColor(value);
+    	
+    	if (value == null && lc.getFilterSet() != null)
+    		value = getValueFromFilter(lc.getFilterSet().getExFilter());
 
+    	if (value == null) 
+    		value = getValueFromFilter(lc.getSecondaryExcitationFilter());
+    	
+    	return determineColor(value);
+    }
+ 
     /**
-     * Determines the color usually associated to the specified emission
-     * wavelength.
+     * Determines the color corresponding to the passed value.
+     * 
+     * @param value The value to handle.
+     * @return
+     */
+    private static int[] determineColor(Integer value)
+    {
+    	if (value == null) return null;
+    	if (rangeBlue(value)) return newBlueColor();
+    	if (rangeGreen(value)) return newGreenColor();
+    	if (rangeRed(value)) return newRedColor();
+    	return null;
+    }
+    
+    /**
+     * Returns the range of the wavelength or <code>null</code>.
+     * 
+     * @param filter The filter to handle.
+     * @return See above.
+     */
+    private static Integer getValueFromFilter(Filter filter)
+    {
+    	if (filter == null) return null;
+    	TransmittanceRange transmittance = filter.getTransmittanceRange();
+    	if (transmittance == null) return null;
+    	Integer cutIn = transmittance.getCutIn();
+    	Integer cutOut = transmittance.getCutOut();
+    	if (cutIn == null) return null;
+    	if (cutOut == null || cutOut == 0) cutOut = cutIn+20;
+    	return (cutIn+cutOut)/2;
+    }
+    
+    /**
+     * Returns <code>true</code> if the channel has emission metadata,
+     * <code>false</code> otherwise.
+     * 
+     * @param f The filter to handle.
+     * @return See above.
+     */
+    private static boolean isFilterHasEmissionData(Filter f)
+    {
+    	if (f == null) return false;
+    	TransmittanceRange transmittance = f.getTransmittanceRange();
+    	if (transmittance == null) return false;
+    	return transmittance.getCutIn() != null;
+    }
+    
+    /**
+     * Determines the color usually associated to the specified wavelength.
      * 
      * @param index
      *            The channel index.
@@ -169,20 +274,40 @@ public class ColorsFactory {
      * @return A color.
      */
     public static int[] getColor(int index, Channel channel) {
-        int[] c = ColorsFactory.getColor(channel);
-        if (c != null) {
-            return c;
-        }
+    	return getColor(index, channel, channel.getLogicalChannel());
+    }
+
+    /**
+     * Determines the color usually associated to the specified wavelength.
+     * 
+     * @param index The channel index.
+     * @param channel The channel to determine the color for.
+     * @return A color.
+     */
+    public static int[] getColor(int index, Channel channel, LogicalChannel
+    		lc) {
+    	if (lc == null) lc = channel.getLogicalChannel();
+        int[] c = ColorsFactory.getColor(channel, lc);
+        if (c != null) return c;
         switch (index) {
-            case 0:
-            	return newRedColor();
-            case 1:
-            	return newBlueColor();
-            default:
-            	return newGreenColor();
+            case 0: return newRedColor();
+            case 1: return newBlueColor();
+            default: return newGreenColor();
         }
     }
 
+    /**
+     * Returns <code>true</code> if the channel has emission metadata,
+     * <code>false</code> otherwise.
+     * 
+     * @param lc The channel to handle.
+     * @return See above.
+     */
+    public static boolean hasEmissionData(LogicalChannel lc)
+    {
+    	return hasEmissionExcitationData(lc, false);
+    }
+    
     /**
      * Creates a new <i>Red</i> Color object.
      * 
@@ -209,4 +334,24 @@ public class ColorsFactory {
     public static int[] newBlueColor() {
         return new int[] { 0, 0, 255, DEFAULT_ALPHA };
     }
+    
+    /**
+     * Creates a new <i>Grey</i> Color object.
+     * 
+     * @return An RGBA array representation of the color Blue.
+     */
+    public static int[] newGreyColor() {
+        return new int[] { 128, 128, 128, DEFAULT_ALPHA };
+    }
+    
+    /**
+     * Creates a new <i>White</i> Color object.
+     * 
+     * @return An RGBA array representation of the color Blue.
+     */
+    public static int[] newWhiteColor() {
+        return new int[] { 255, 255, 255, DEFAULT_ALPHA };
+    }
+    
+    
 }

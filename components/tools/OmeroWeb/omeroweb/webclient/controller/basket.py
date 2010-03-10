@@ -22,7 +22,7 @@
 # Version: 1.0
 #
 
-from django.conf import settings
+from django.core.urlresolvers import reverse
 
 from webclient.controller import BaseController
 
@@ -40,7 +40,7 @@ class BaseBasket(BaseController):
 
     def buildBreadcrumb(self, menu=None):
         if menu is not None:
-            self.eContext['breadcrumb'] = ['<a href="/%s/basket/">Basket</a>' % (settings.WEBCLIENT_ROOT_BASE), menu[2:len(menu)].title()]
+            self.eContext['breadcrumb'] = ['<a href="%s">Basket</a>' % (reverse("basket_action")), menu[2:len(menu)].title()]
         else:
             self.eContext['breadcrumb'] = ['Basket']
     
@@ -51,10 +51,14 @@ class BaseBasket(BaseController):
 
         for imgId in request.session['imageInBasket']:
             imInBasket.append(imgId)
+        #for dsId in request.session['datasetInBasket']:
+        #    dsInBasket.append(dsId)
 
         if len(imInBasket) > 0: 
             self.imageInBasket = list(self.conn.getSpecifiedImages(imInBasket))
             self.imgSize = len(self.imageInBasket)
-        
-        self.sizeOfBasket = self.imgSize
+        #if len(dsInBasket) > 0: 
+        #    self.datasetInBasket = list(self.conn.getSpecifiedDatasetsWithImages(dsInBasket))
+        #    self.dsSize = len(self.datasetInBasket)
+        self.sizeOfBasket = self.imgSize#+self.dsSize
     

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: EnumTest.java 3797 2009-02-25 11:25:45Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

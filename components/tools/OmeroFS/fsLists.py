@@ -2,9 +2,12 @@
     OMERO.fs List classes
 
     These are fairly trivial classes to wrap sets. In the present
-    implementation there is no fucntional difference between
+    implementation there is no functional difference between
     Whitelist and Blacklist. They have been factored out for literal
     reasons and to leave the door open for future changes.
+    
+    Copyright 2009 University of Dundee. All rights reserved.
+    Use is subject to license terms supplied in LICENSE.txt
 
 """
 
@@ -22,7 +25,7 @@ class Greylist(object):
         :group String Representation: __repr__
 
     """
-    
+
     def __init__(self, initialList=[]):
         """
             Create an initial initial list.
@@ -95,13 +98,16 @@ class Greylist(object):
             
             :Parameters:
                 anItem : string
-                    An string of any type.
+                    A string.
 
             :return: Existence of item on list.
             :rtype: boolean
             
-        """     
-        return anItem in self.theSet
+        """
+        if len(self.theSet) == 0:
+            return True
+        else:
+            return anItem in self.theSet
 
 class Whitelist(Greylist):
     """

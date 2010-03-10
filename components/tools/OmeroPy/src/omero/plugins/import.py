@@ -8,7 +8,7 @@
 """
 
 import subprocess, optparse, os, sys, signal, time
-from omero.cli import Arguments, BaseControl, VERSION, OMERODIR
+from omero.cli import Arguments, BaseControl, CLI, VERSION, OMERODIR
 import omero.java
 
 START_CLASS="ome.formats.importer.cli.CommandLineImporter"
@@ -23,10 +23,28 @@ class ImportControl(BaseControl):
     def _run(self, args = []):
         args = Arguments(args)
         client_dir = self.ctx.dir / "lib" / "client"
-        log4j = "-Dlog4j.configuration=log4j.properties"
+        log4j = "-Dlog4j.configuration=log4j-cli.properties"
         classpath = [ file.abspath() for file in client_dir.files("*.jar") ]
-        xargs = [ log4j, "-Xmx256M", "-cp", os.pathsep.join(classpath) ]
-        p = omero.java.popen(self.command + args.args, debug=False, xargs = xargs, stdout=sys.stdout)
+        xargs = [ log4j, "-Xmx1024M", "-cp", os.pathsep.join(classpath) ]
+
+        # Here we permit passing ---file=some_output_file in order to
+        # facilitate the omero.util.import_candidates.as_dictionary
+        # call. This may not always be necessary.
+        out = None
+	err = None
+        for i in args.args:
+            if i.startswith("---file="):
+                out = i
+            if i.startswith("---errs="):
+                err = i
+        if out:
+            args.args.remove(out)
+            out = open(out[8:], "w")
+        if err:
+            args.args.remove(err)
+            err = open(err[8:], "w")
+
+        p = omero.java.popen(self.command + args.args, debug=False, xargs = xargs, stdout=out, stderr=err)
         self.ctx.rv = p.wait()
 
     def help(self, args = None):
@@ -47,4 +65,4 @@ try:
     register("import", ImportControl)
     register("testengine", TestEngine)
 except NameError:
-    ImportControl()._main()
+    ImportControl(None)._main()

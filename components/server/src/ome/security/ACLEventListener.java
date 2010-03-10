@@ -43,13 +43,13 @@ import org.hibernate.event.PreUpdateEventListener;
  * {@link SecurityViolation}.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2637 $, $Date: 2008-07-30 21:58:37 +0100 (Wed, 30 Jul 2008) $
  * @see SecuritySystem
  * @see SecurityViolation
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-07-30 21:58:37 +0100 (Wed, 30 Jul 2008) $")
+@RevisionNumber("$Revision: 2637 $")
 public class ACLEventListener implements
 /* BEFORE... */PreDeleteEventListener, PreInsertEventListener,
 /* and...... */PreLoadEventListener, PreUpdateEventListener,

@@ -27,7 +27,7 @@ import java.util.Set;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 2016 $ $Date: 2008-01-04 14:17:18 +0000 (Fri, 04 Jan 2008) $) </small>
  * @since OMERO-3.0
  */
 public abstract class SemanticType {

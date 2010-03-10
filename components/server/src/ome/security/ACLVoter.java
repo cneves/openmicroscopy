@@ -23,13 +23,13 @@ import ome.system.EventContext;
  * helper security interface for all decisions on access control
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2637 $, $Date: 2008-07-30 21:58:37 +0100 (Wed, 30 Jul 2008) $
  * @see SecuritySystem
  * @see ACLEventListener
  * @since 3.0-M3
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-07-30 21:58:37 +0100 (Wed, 30 Jul 2008) $")
+@RevisionNumber("$Revision: 2637 $")
 public interface ACLVoter {
 
     /**

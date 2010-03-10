@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: HelperUnitTest.java 3753 2009-02-24 10:28:20Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

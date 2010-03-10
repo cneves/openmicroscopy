@@ -1,6 +1,8 @@
-function PerformProjection(pixelsId, zSection)
+function projectedImage = PerformProjection(gateway, pixelsId, channel, timePoint)
+% Retrieves a stack of z-slices for the given pixels id at the given channel
+% and time point, and then calculates the mean projection in memory.
+%
+% The Gateway object is the service as returned by loadOmero
 
-omerojService = createOmeroJService('ice.config', 'root', 'omero');
-pixels = getPixels(omerojService, pixelsId);
-stack = getPlaneStack(omerojService, pixelsId, zSection);
+stack = getPlaneStack(gateway, pixelsId, channel, timePoint);
 projectedImage = ProjectionOnStack(stack,'mean');

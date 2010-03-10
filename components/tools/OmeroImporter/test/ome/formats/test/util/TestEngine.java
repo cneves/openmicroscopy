@@ -7,8 +7,27 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.text.Format;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
+import ome.formats.OMEROMetadataStoreClient;
+import ome.formats.importer.ImportConfig;
+import ome.formats.importer.ImportLibrary;
+import ome.formats.importer.OMEROWrapper;
+import ome.formats.importer.util.HtmlMessenger;
+import ome.formats.test.util.TestEngineConfig.ErrorOn;
+import omero.ServerError;
+import omero.model.Dataset;
+import omero.model.IObject;
+import omero.model.Project;
+
+import org.apache.commons.httpclient.methods.multipart.Part;
+import org.apache.commons.httpclient.methods.multipart.StringPart;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.aop.framework.ProxyFactory;
@@ -16,40 +35,51 @@ import org.springframework.aop.framework.ProxyFactory;
 import Glacier2.CannotCreateSessionException;
 import Glacier2.PermissionDeniedException;
 
-import ome.formats.OMEROMetadataStoreClient;
-import ome.formats.importer.ImportLibrary;
-import ome.formats.importer.OMEROWrapper;
-import omero.ServerError;
-import omero.model.Dataset;
-import omero.model.Project;
-
 public class TestEngine
 {   
-	/** Logger for this class */
-	private Log log = LogFactory.getLog(TestEngine.class);
-	
-	/** Our configuration. */
-	private TestEngineConfig config;
-	
+
     // usage() name
     private static final String APP_NAME = "import-tester";
+
+	/** Logger for this class */
+	private static final Log log = LogFactory.getLog(TestEngine.class);
+	
+	// Immutable state
+	
+	/** Our configuration. */
+	private final TestEngineConfig config;
+	    
+    private final OMEROMetadataStoreClient store;
+    private final ImportLibrary importLibrary;
+    private final OMEROWrapper wrapper;
+    private final IniWritingInterceptor interceptor = new IniWritingInterceptor();
     
-    private OMEROMetadataStoreClient store;
-    private ImportLibrary importLibrary;
-    private OMEROWrapper wrapper;
-    
-    private IniWritingInterceptor interceptor = new IniWritingInterceptor();
+    // Mutable state
+    int errors = 0;
+   
+    private String login_url;
+    private String login_username;
+    private String login_password;
+    private String message_url;
+    private String comment_url;
+
+    private Date start;
     
     public TestEngine(TestEngineConfig config)
     	throws CannotCreateSessionException, PermissionDeniedException, ServerError
     {
     	this.config = config;
-        store = new OMEROMetadataStoreClient();
-        ProxyFactory pf = new ProxyFactory(store);
+        ProxyFactory pf = new ProxyFactory(new OMEROMetadataStoreClient());
         pf.addAdvice(interceptor);
         pf.setProxyTargetClass(true);
         store = (OMEROMetadataStoreClient) pf.getProxy();
-    	wrapper = new OMEROWrapper();
+    	wrapper = new OMEROWrapper(new ImportConfig());
+    	
+        login_url = config.getFeedbackLoginUrl();
+        login_username = config.getFeedbackLoginUsername();
+        login_password = config.getFeedbackLoginPassword();
+        message_url = config.getFeedbackMessageUrl();
+        comment_url = config.getCommentUrl();
     	
         // Login
     	if (config.getSessionKey() != null)
@@ -82,8 +112,7 @@ public class TestEngine
             String name = projectDirectory.getName(); 
             log.info("Storing dataset: " + name);
             Dataset dataset = store.addDataset(name, "", project);
-            importLibrary.setTarget(dataset);
-        	status = processDirectory(config.getPopulate(), projectDirectory);
+        	status = processDirectory(config.getPopulate(), projectDirectory, dataset);
         }
         else
         {
@@ -95,10 +124,9 @@ public class TestEngine
                     String name = datasetDirectory.getName(); 
                     log.info("Storing dataset: " + name);
                     Dataset dataset = store.addDataset(name, "", project);
-                    importLibrary.setTarget(dataset);
                     // In each sub-directory/dataset, import the images needed
         			status = processDirectory(config.getPopulate(),
-        					                  datasetDirectory);
+        					                  datasetDirectory, dataset);
         		}
         	}
         }
@@ -106,7 +134,7 @@ public class TestEngine
         return status;
     }
     
-    private boolean processDirectory(boolean populate, File directory)
+    private boolean processDirectory(boolean populate, File directory, IObject target)
     	throws Throwable
     {
     	String iniFilePath = directory + File.separator + "test_setup.ini";
@@ -127,8 +155,9 @@ public class TestEngine
 			{
 				for (String fileType : fileTypes)
 				{
-					if (datasetFile.isFile() 
-						&& datasetFile.getName().endsWith("." + fileType))
+                    if (datasetFile.isFile() 
+                            && datasetFile.getName().endsWith("." + fileType)
+                            && !datasetFile.getName().startsWith("."))
 					{
 						iniFile.addFile(datasetFile.getName());
 					}
@@ -165,16 +194,41 @@ public class TestEngine
 				" missing but referenced in test_setup.ini");
 				continue;
 			}
-
+            
 			try
 			{
-				interceptor.setSourceFile(file);
-				importLibrary.importImage(file, 0, 0, 1, fileList[j], null, false, null);
+                store.createRoot();
+                start = new Date();
+                // record used files to log file
+                log.info("Starting setId() for used files.");
+                wrapper.getReader().setId(file.getAbsolutePath());
+                log.info("Ending setId() for used files.");
+                log.info("Starting used file dump.");
+                String[] usedFiles = wrapper.getReader().getUsedFiles();
+                if (usedFiles != null)
+                {
+                    log.info("Used file count: " + usedFiles.length);
+                }
+                else
+                {
+                    log.info("Used files are 'null'");
+                }
+                String usedFileString = "Used Files: ";
+                for (String usedFile : usedFiles)
+                {
+                    usedFileString = usedFileString.concat(usedFile + " ");   
+                }
+                log.info(usedFileString);
+                System.err.println(usedFileString);
+                
+                // Do import
+				interceptor.setSourceFile(file); 
+				importLibrary.importImage(file, 0, 0, 1, fileList[j], null, false, true, null, target);
 				iniFile.flush();
 			}
 			catch (Throwable e)
 			{
-				// Flush our file log to disk
+			    // Flush our file log to disk
 			    try 
 			    {
 			        iniFile.flush();
@@ -182,12 +236,38 @@ public class TestEngine
 			    {
 			        log.error("Failed on flushing ini file" + e1);
 			    }
-				store.logout();
-				log.error("Failed on file:" + file.getName());
-				throw e;
+				//store.logout();
+			    
+				log.error("Failed on file: " + file.getAbsolutePath());
+				log.error(e);
+				e.printStackTrace();
+				
+				errors += 1;
+				//sendRequest("", "TestEngine Error", e, file);
+				//throw e;
 			}
 		}
     	return true;
+    }
+    
+    /**
+     * Exits the JVM by calculating the proper exit code based on the number
+     * (and eventually type) of errors and {@link TestEngineConfig#getErrorOn()}
+     */
+    public void exit()
+    {
+        ErrorOn err = ErrorOn.valueOf(config.getErrorOn());
+        int returnCode = 0;
+        switch (err) {
+            case never: {
+                break;
+            }
+            default: {
+                returnCode = errors;                
+            }
+        }
+        System.err.println("Number of errors: " + errors);
+        System.exit(returnCode);
     }
 
     /**
@@ -208,6 +288,8 @@ public class TestEngine
                 "  -w\tOMERO experimenter password\n" +
                 "  -k\tOMERO session key (can be used in place of -u and -w)\n" +
                 "  -p\tOMERO server port [defaults to 4063]\n" +
+                "  -e\tRaise error on given situation: any, minimal, never [defaults to any]\n" +
+                "  -f\tOMERO feedback url [defaults to %s]\n" +
                 "  -c\tConfiguration file location (instead of any of the above arguments)\n" +
                 "  -x\tPopulate initiation files with metadata [defaults to False]\n" +
                 "  -h, --help\tDisplay this help and exit\n" +
@@ -216,8 +298,92 @@ public class TestEngine
                 "ex. %s -s localhost -u bart -w simpson ShortRunImages\n" +
                 "\n" +
                 "Report bugs to <ome-users@openmicroscopy.org.uk>",
-                APP_NAME, APP_NAME));
+                APP_NAME, TestEngineConfig.DEFAULT_FEEDBACK, APP_NAME));
         System.exit(1);
+    }
+    
+    /**
+     * Sends error message to feedback system.
+     */
+    private void sendRequest(String email, String comment, Throwable error, File file)
+    {
+        List<Part> postList = new ArrayList<Part>();
+
+        Date end = new Date();
+        Format formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+        
+        /*
+        String parent = file.getParent();
+        String[] splitPath = parent.split(File.separator);
+        String feedback_id = "";
+        feedback_id = splitPath[splitPath.length-1];
+        
+        postList.add(new StringPart("selected_file", file.getName()));
+        postList.add(new StringPart("feedback_id", feedback_id));
+        postList.add(new StringPart("started", formatter.format(start)));
+        postList.add(new StringPart("ended", formatter.format(end)));
+        postList.add(new StringPart("error", error));
+        
+        postList.add(new StringPart("repo_java_version", System.getProperty("java.version")));
+        postList.add(new StringPart("repo_java_classpath", System.getProperty("java.class.path")));
+        postList.add(new StringPart("repo_os_name", System.getProperty("os.name")));
+        postList.add(new StringPart("repo_os_arch", System.getProperty("os.arch")));
+        postList.add(new StringPart("repo_os_version", System.getProperty("os.version")));
+        
+        try {
+            HtmlMessenger messenger = new HtmlMessenger(message_url, postList);
+            
+            messenger.login(login_url, login_username, login_password);
+            String serverReply = messenger.executePost();
+            log.info("Feedback sent. Returned: " + serverReply);
+        }
+        catch( Exception e ) {
+            log.error("Error while sending debug information.", e);
+            //Get the full debug text
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            e.printStackTrace(pw);
+            
+            String debugText = sw.toString();
+            
+            log.error("Feedback failed with: " + debugText);
+        }
+        */
+        
+        StringWriter strw = new StringWriter();
+        error.printStackTrace(new PrintWriter(strw));
+                
+        comment = comment + ", Started: " + formatter.format(start) + ", Ended: " + formatter.format(end);
+        
+        postList.add(new StringPart("java_version", System.getProperty("java.version")));
+        postList.add(new StringPart("java_classpath", System.getProperty("java.class.path")));
+        postList.add(new StringPart("os_name", System.getProperty("os.name")));
+        postList.add(new StringPart("os_arch", System.getProperty("os.arch")));
+        postList.add(new StringPart("os_version", System.getProperty("os.version")));
+        postList.add(new StringPart("error", "File: " + file.getAbsolutePath() + "\n]n" + strw.toString()));
+        postList.add(new StringPart("comment", comment));
+        postList.add(new StringPart("email", email));
+        postList.add(new StringPart("app_name", "5"));
+        postList.add(new StringPart("import_session", "test"));
+        postList.add(new StringPart("extra", ""));
+        
+        try {
+            HtmlMessenger messenger = new HtmlMessenger(comment_url, postList);
+            @SuppressWarnings("unused")
+            String serverReply = messenger.executePost();
+            log.info("Feedback sent. Returned: " + serverReply);
+        }
+        catch( Exception e ) {
+            log.error("Error while sending debug information.", e);
+            //Get the full debug text
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            e.printStackTrace(pw);
+            
+            String debugText = sw.toString();
+            
+            log.error("Feedback failed with: " + debugText);
+        }
     }
     
     /**
@@ -233,6 +399,8 @@ public class TestEngine
     public static void main(String[] args) throws Throwable
     {
     	LongOpt[] longOptions = new LongOpt[] {
+    	    new LongOpt("error-on", LongOpt.REQUIRED_ARGUMENT, null, 'e'),
+    	    new LongOpt("feedback", LongOpt.REQUIRED_ARGUMENT, null,'f'),
     		new LongOpt("help", LongOpt.NO_ARGUMENT, null, 'h'),	
     		new LongOpt("no-recurse", LongOpt.OPTIONAL_ARGUMENT, null, 'r')
     	};
@@ -304,6 +472,15 @@ public class TestEngine
                 	config.setRecurse(!config.getRecurse());
                 	break;
                 }
+                case 'e':
+                {
+                    config.setErrorOn(g.getOptarg());
+                }
+                case 'f':
+                {
+                    config.setFeedbackUrl(g.getOptarg());
+                    break;
+                }
                 case 'c':
                 {
                 	// Ignore, we've dealt with this already.
@@ -335,5 +512,6 @@ public class TestEngine
         
         TestEngine engine = new TestEngine(config);
         engine.run(path);
+        engine.exit();
     }
 }

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ConfigImpl.java 4843 2009-09-07 08:28:29Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -49,7 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
  * implementations. See source code documentation for more.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 4843 $, $Date: 2009-09-07 09:28:29 +0100 (Mon, 07 Sep 2009) $
  * @since 3.0-M3
  * @see IConfig
  */
@@ -59,8 +59,8 @@ import org.springframework.transaction.annotation.Transactional;
  * setting the subversion properties on this class file. They can be accessed
  * via ome.system.Version
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2009-09-07 09:28:29 +0100 (Mon, 07 Sep 2009) $")
+@RevisionNumber("$Revision: 4843 $")
 /*
  * Developer notes: --------------- The annotations below (and on the individual
  * methods) are central to the definition of this service. They are used in
@@ -323,7 +323,7 @@ public class ConfigImpl extends AbstractLevel2Service implements LocalConfig {
         }
         return m.group(1);
     }
-
+    
     @PermitAll
     // see above
     public String getDatabaseVersion() {
@@ -336,6 +336,21 @@ public class ConfigImpl extends AbstractLevel2Service implements LocalConfig {
                         String v = arg0.getString("currentversion");
                         int p = arg0.getInt("currentpatch");
                         return v + "__" + p;
+                    }
+
+                }).get(0);
+    }
+
+    @PermitAll
+    // see above
+    public String getDatabaseUuid() {
+        return jdbc.query(
+                "select value from configuration where name = 'omero.db.uuid' ",
+                new ParameterizedRowMapper<String>() {
+                    public String mapRow(ResultSet arg0, int arg1)
+                            throws SQLException {
+                        String s = arg0.getString("value");
+                        return s;
                     }
 
                 }).get(0);

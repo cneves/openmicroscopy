@@ -55,7 +55,7 @@ import org.springframework.util.ResourceUtils;
  * implementation of the ITypes service interface.
  *
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date: 2008-01-04
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 4940 $ $Date: 2008-01-04
  *          14:17:02 +0000 (Fri, 04 Jan 2008) $) </small>
  * @since OMERO 3.0
  */
@@ -132,7 +132,7 @@ public class TypesImpl extends AbstractLevel2Service implements ITypes {
         return k.cast(e);
     }
 
-    @RolesAllowed("system")
+    @RolesAllowed("user")
     public <T extends IEnum> List<Class<T>> getEnumerationTypes() {
 
         List<Class<T>> list = new ArrayList<Class<T>>();
@@ -153,7 +153,7 @@ public class TypesImpl extends AbstractLevel2Service implements ITypes {
         return list;
     }
 
-    @RolesAllowed("system")
+    @RolesAllowed("user")
     public <T extends IEnum> Map<Class<T>, List<T>> getEnumerationsWithEntries() {
         Map<Class<T>, List<T>> map = new HashMap<Class<T>, List<T>>();
         for (Class klass : getEnumerationTypes()) {
@@ -245,38 +245,24 @@ public class TypesImpl extends AbstractLevel2Service implements ITypes {
             List<IEnum> listToDel = new ArrayList<IEnum>();
             List<IEnum> newList = new ArrayList<IEnum>();
 
-            for (Long i = 1L; i < newProp.size() + 1; i++) {
-
-                String val = newProp.getProperty(klass.getName() + "."
+            int nps = newProp.size();
+            int lod = listOnDB.size();
+            
+            for (Long i = 1L; i < nps + 1; i++) {
+        		String val = newProp.getProperty(klass.getName() + "."
                         + i.toString());
-                if (listOnDB.size() >= newProp.size()) {
-
-                    boolean flag = false;
-                    for (IEnum oldOb : listOnDB) {
-                        if (val.equals(oldOb.getValue())) {
-                            if (i.intValue() == oldOb.getId().intValue()) {
-                                newList.add(oldOb);
-                                listToDel.add(oldOb);
-                                flag = true;
-                            }
-                        }
-                    }
-
-                    if (!flag) {
-                        IEnum newEntry = klass.getConstructor(String.class)
-                                .newInstance(val);
-                        newList.add(i.intValue() - 1, newEntry);
-                    }
-
-                } else {
-                    IEnum newEntry = klass.getConstructor(String.class)
-                            .newInstance(val);
-                    newList.add(i.intValue() - 1, newEntry);
+        		IEnum newEntry = klass.getConstructor(String.class).newInstance(val);
+        		newList.add(i.intValue() - 1, newEntry);
+        	}
+            
+            if (lod > nps) {
+            	for (int j = nps-1; j < lod; j++) {
+               		IEnum oldOb = listOnDB.get(j - 1);    
+                  	listToDel.add(oldOb);
                 }
             }
-
-            listOnDB.removeAll(listToDel);
-            for (IEnum en : listOnDB) {
+            
+            for (IEnum en : listToDel) {
                 deleteEnumeration(en);
             }
 

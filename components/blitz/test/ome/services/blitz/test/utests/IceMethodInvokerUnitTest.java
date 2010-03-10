@@ -6,8 +6,16 @@
  */
 package ome.services.blitz.test.utests;
 
+import static omero.rtypes.rbool;
+import static omero.rtypes.rdouble;
+import static omero.rtypes.rint;
+import static omero.rtypes.rinternal;
+import static omero.rtypes.rlist;
+import static omero.rtypes.rlong;
+import static omero.rtypes.rstring;
+import static omero.rtypes.rtime;
+
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,21 +32,24 @@ import ome.api.IMetadata;
 import ome.api.IQuery;
 import ome.api.ISession;
 import ome.api.IShare;
+import ome.api.ITypes;
 import ome.api.IUpdate;
 import ome.api.RawFileStore;
 import ome.api.RawPixelsStore;
 import ome.api.Search;
 import ome.api.ServiceInterface;
 import ome.api.ThumbnailStore;
-import ome.conditions.ApiUsageException;
 import ome.conditions.SecurityViolation;
 import ome.model.IObject;
 import ome.model.acquisition.Objective;
 import ome.model.enums.Family;
+import ome.model.enums.FilterType;
 import ome.model.internal.Permissions;
 import ome.model.meta.ExperimenterGroup;
+import ome.model.roi.Roi;
 import ome.parameters.Parameters;
 import ome.parameters.QueryParameter;
+import ome.services.blitz.impl.RoiI;
 import ome.services.blitz.util.ConvertToBlitzExceptionMessage;
 import ome.services.blitz.util.IceMethodInvoker;
 import ome.services.messages.GlobalMulticaster;
@@ -50,6 +61,7 @@ import omeis.providers.re.RenderingEngine;
 import omero.RString;
 import omero.RType;
 import omero.UnloadedCollectionException;
+import omero.api.RoiResult;
 import omero.model.Experimenter;
 import omero.model.ExperimenterI;
 import omero.model.Image;
@@ -69,8 +81,6 @@ import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationListener;
 import org.testng.annotations.Configuration;
 import org.testng.annotations.Test;
-
-import static omero.rtypes.*;
 
 @Test
 public class IceMethodInvokerUnitTest extends MockObjectTestCase {
@@ -147,6 +157,10 @@ public class IceMethodInvokerUnitTest extends MockObjectTestCase {
         }
 
         public void createThumbnails() {
+        }
+        
+        public void createThumbnailsByLongestSideSet(Integer size,
+                Set<Long> pixelsIds) {
         }
 
         public byte[] getThumbnail(Integer sizeX, Integer sizeY) {
@@ -561,6 +575,22 @@ public class IceMethodInvokerUnitTest extends MockObjectTestCase {
 
     }
 
+    // Types
+
+    @Test( groups = {"ticket:1436","broken"} )
+    public void testTypesWorks() throws Exception {
+
+        ITypes t;
+
+        init(ITypes.class, "getEnumerationTypes");
+        method().will(returnValue(Arrays.asList(FilterType.class)));
+
+        Object rv = invoke();
+        assertNotNull(rv);
+
+    }
+
+    
     // Query
 
     @Test
@@ -1036,6 +1066,22 @@ public class IceMethodInvokerUnitTest extends MockObjectTestCase {
         }
     }
 
+
+    // ~ RoiResults
+    // =========================================================================
+
+    @Test
+    public void testRoiResultMaps() throws Exception {
+        Map<Long, List<Roi>> rois = new HashMap<Long, List<Roi>>();
+        rois.put(1L, Collections.singletonList(new Roi()));
+        IceMapper mapper = new IceMapper();
+        Map<Long, RoiResult> rrs = (Map<Long, RoiResult>)
+            new RoiI.RoiResultMapReturnMapper(null).mapReturnValue(mapper, rois);
+        RoiResult rr = rrs.get(1L);
+        assertNotNull(rr);
+        
+    }
+    
     // ~ Helpers
     // =========================================================================
 

@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: RawPixelsBean.java 3867 2009-02-27 12:12:08Z callan $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @author <br>
  *         Josh Moore&nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de"> josh.moore@gmx.de</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date: 2005/07/05
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 3867 $ $Date: 2005/07/05
  *          16:13:52 $) </small>
  * @since OMERO3
  */

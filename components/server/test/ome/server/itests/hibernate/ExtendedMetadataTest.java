@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: ExtendedMetadataTest.java 3978 2009-03-10 08:54:25Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

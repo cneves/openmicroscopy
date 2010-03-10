@@ -23,10 +23,8 @@
 			<!-- Note: in the model acquisitionDate is called creationDate but the DB already has a creation date for the object -->
 			<!-- Note: in the model acquisitionDate(creationDate) is optional so if not available should be set to current time on import-->
 			<optional name="imagingEnvironment" type="ome.model.acquisition.ImagingEnvironment"/>
-			<optional name="objectiveSettings" type="ome.model.acquisition.ObjectiveSettings">
-				<!-- Note: objectiveSettings maps to ObjectiveRef (ID and values) in model-->
-				<rule id="INS_OBJ_SYNCH" description="only if instrument defined"/>
-			</optional>
+			<!-- Note: objectiveSettings maps to ObjectiveRef (ID and values) in model-->
+			<optional name="objectiveSettings" type="ome.model.acquisition.ObjectiveSettings"/>
 			<optional name="instrument" type="ome.model.acquisition.Instrument"/>
 			<!-- Note: instrument is called InstrumentRef (ID only ref) in model-->
 			<optional name="stageLabel" type="ome.model.acquisition.StageLabel"/>
@@ -35,6 +33,7 @@
 			<!-- Note: acquiredPixels is missing, and OMERO uses the pixels[0] as defaultPixels -->
 			<onemany name="pixels" type="ome.model.core.Pixels" inverse="image" ordered="true"/>
 			<zeromany name="wellSamples" type="ome.model.screen.WellSample" inverse="image"/>
+                        <zeromany name="rois" type="ome.model.roi.Roi" inverse="image"/>
 			<!-- Containers -->
 			<parent name="datasetLinks" type="ome.model.containers.DatasetImageLink" target="ome.model.containers.Dataset"/>
 		</properties>
@@ -71,16 +70,12 @@
 			<optional name="waveIncrement" type="int"/>
 			<optional name="timeIncrement" type="double"/>
 			<optional name="methodology" type="string"/>
-			<onemany name="planeInfo" type="ome.model.core.PlaneInfo" inverse="pixels">
-				<!-- Note: planeInfo is called Plane in model and is zeromany -->
-				<rule id="PLANE_INFO_CARDINALITY" description="0|sizez*sizey*sizec"/>
-			</onemany>
+			<!-- Note: planeInfo is called Plane in model and is zeromany -->
+			<onemany name="planeInfo" type="ome.model.core.PlaneInfo" inverse="pixels"/>
 			<!-- TODO: storage -->
 			<parent name="pixelsFileMaps" type="ome.model.core.PixelsOriginalFileMap" target="ome.model.core.OriginalFile"/>
 			<!-- Acquisition Context 2 -->
-			<onemany name="channels" type="ome.model.core.Channel" inverse="pixels" ordered="true">
-				<rule id="CHANNEL_CARDINALITY" description="Must be sizeC channels"/>
-			</onemany>
+			<onemany name="channels" type="ome.model.core.Channel" inverse="pixels" ordered="true"/>
 			<!--Display Settings 1-->
 			<zeromany name="settings" type="ome.model.display.RenderingDef" inverse="pixels"/>
 			<zeromany name="thumbnails" type="ome.model.display.Thumbnail" inverse="pixels"/>
@@ -160,12 +155,8 @@
 		<properties>
 			<optional name="temperature" type="double"/>
 			<optional name="airPressure" type="double"/>
-			<optional name="humidity" type="double">
-				<rule id="HUMIDITY_RANGE" type="range" description="0-1"/>
-			</optional>
-			<optional name="co2percent" type="double">
-				<rule id="CO2_RANGE" type="range" description="0-1"/>
-			</optional>
+			<optional name="humidity" type="double"/>
+			<optional name="co2percent" type="double"/>
 		</properties>
 	</type>
 <!-- 
@@ -176,26 +167,11 @@
 	<type id="ome.model.core.Channel" annotated="true">
 		<!-- Note: Channel is not in model-->
 		<properties>
-			<optional name="statsInfo" type="ome.model.stats.StatsInfo"><!-- Note: statsInfo is not in model-->
-				<rule id="STATSINFO_DEP" type="dependency" description="depends on pixelType"/>
-				<!--TODO: depends how?-->
-			</optional>
-			<optional name="red" type="int">
-				<rule id="COLOR_REQ" type="conditionalNull" description="color must exist if PIType == RGB|ARGB|CMYK|HSV"/>
-				<rule id="COLOR_RANGE" type="range" description="rule0_255 all values between 0-255"/>
-			</optional>
-			<optional name="green" type="int">
-				<rule id="COLOR_REQ" type="conditionalNull" description="color must exist if PIType == RGB|ARGB|CMYK|HSV"/>
-				<rule id="COLOR_RANGE" type="range" description="rule0_255 all values between 0-255"/>
-			</optional>
-			<optional name="blue" type="int">
-				<rule id="COLOR_REQ" type="conditionalNull" description="color must exist if PIType == RGB|ARGB|CMYK|HSV"/>
-				<rule id="COLOR_RANGE" type="range" description="rule0_255 all values between 0-255"/>
-			</optional>
-			<optional name="alpha" type="int">
-				<rule id="COLOR_REQ" type="conditionalNull" description="color must exist if PIType == RGB|ARGB|CMYK|HSV"/>
-				<rule id="COLOR_RANGE" type="range" description="rule0_255 all values between 0-255"/>
-			</optional>
+			<optional name="statsInfo" type="ome.model.stats.StatsInfo"/><!-- Note: statsInfo is not in model-->
+			<optional name="red" type="int"/>
+			<optional name="green" type="int"/>
+			<optional name="blue" type="int"/>
+			<optional name="alpha" type="int"/>
 			<manyone name="logicalChannel" type="ome.model.core.LogicalChannel" inverse="channels"/>
 			<manyone name="pixels" type="ome.model.core.Pixels" ordered="true"/>
 		</properties>
@@ -215,10 +191,8 @@
 			<optional name="ndFilter" type="double"/>
 			<optional name="otf" type="ome.model.acquisition.OTF"/>
 			<!-- Note: oft is called OTFRef (ID only Ref) in model-->
-			<optional name="detectorSettings" type="ome.model.acquisition.DetectorSettings">
-				<!-- Note: detectorSettings is called DetectorRef (ID and values) in model-->
-				<rule id="DETECTOR_SETTINGS_REQ" type="conditionalNull" description="if defined, the instrument must be defined"/>
-			</optional>
+			<optional name="detectorSettings" type="ome.model.acquisition.DetectorSettings"/>
+			<!-- Note: detectorSettings is called DetectorRef (ID and values) in model-->
 			<optional name="lightSourceSettings" type="ome.model.acquisition.LightSettings"/>
 			<!-- Note: lightSourceSettings is called LightSourceRef (ID and values) in model-->
 			<optional name="filterSet" type="ome.model.acquisition.FilterSet"/>
@@ -230,6 +204,7 @@
 			<optional name="mode" type="ome.model.enums.AcquisitionMode"/>
 			<optional name="pockelCellSetting" type="int"/>
 			<onemany name="channels" type="ome.model.core.Channel" inverse="logicalChannel"/>
+                        <manyzero name="shapes" type="ome.model.roi.Shape" inverse="channels"/>
 		</properties>
 	</type>
 	<type id="ome.model.stats.StatsInfo">
@@ -264,16 +239,13 @@
 			<!-- Note: BinaryFile is in model but not used in the DB  -->
 			<optional name="filterSet" type="ome.model.acquisition.FilterSet"/>
 			<required name="objective" type="ome.model.acquisition.Objective"/>
-			<!-- TODO: rule to check image_link_objective ? -->
 			<manyone name="instrument" type="ome.model.acquisition.Instrument"/>
 		</properties>
 	</type>
 	<type id="ome.model.acquisition.LightSettings">
 		<!-- Note: LightSettings are stored in LightSourceRef in model-->
 		<properties>
-			<optional name="attenuation" type="double">
-				<rule id="ATTENUATION_RANGE" type="range" description="0-1"/>
-			</optional>
+			<optional name="attenuation" type="double"/>
 			<optional name="wavelength" type="int"/>
 			<required name="lightSource" type="ome.model.acquisition.LightSource"/>
 			<!-- Note: lightSource is ID in model-->
@@ -419,9 +391,7 @@
 			<optional name="cutOut" type="int"/>
 			<optional name="cutInTolerance" type="int"/>
 			<optional name="cutOutTolerance" type="int"/>
-			<optional name="transmittance" type="double">
-				<rule id="TRANSMITTANCE_RANGE" type="range" description="0-1"/>
-			</optional>
+			<optional name="transmittance" type="double"/>
 		</properties>
 	</type>
 <!-- 
@@ -510,66 +480,127 @@
 	<enum id="ome.model.enums.Format">
 		<!-- Note: Format is not in model but used by OriginalFile-->
 		<entry name="PNG"/>
+		<entry name="Companion/PNG"/>
 		<entry name="JPEG"/>
+		<entry name="Companion/JPEG"/>
 		<entry name="PGM"/>
+		<entry name="Companion/PGM"/>
 		<entry name="Fits"/>
+		<entry name="Companion/Fits"/>
 		<entry name="GIF"/>
+		<entry name="Companion/GIF"/>
 		<entry name="BMP"/>
+		<entry name="Companion/BMP"/>
 		<entry name="Dicom"/>
+		<entry name="Companion/Dicom"/>
 		<entry name="BioRad"/>
+		<entry name="Companion/BioRad"/>
 		<entry name="IPLab"/>
+		<entry name="Companion/IPLab"/>
 		<entry name="Deltavision"/>
+		<entry name="Companion/Deltavision"/>
 		<entry name="MRC"/>
+		<entry name="Companion/MRC"/>
 		<entry name="Gatan"/>
+		<entry name="Companion/Gatan"/>
 		<entry name="Imaris"/>
+		<entry name="Companion/Imaris"/>
 		<entry name="OpenlabRaw"/>
+		<entry name="Companion/OpenlabRaw"/>
 		<entry name="OMEXML"/>
+		<entry name="Companion/OMEXML"/>
 		<entry name="LIF"/>
+		<entry name="Companion/LIF"/>
 		<entry name="AVI"/>
+		<entry name="Companion/AVI"/>
 		<entry name="QT"/>
+		<entry name="Companion/QT"/>
 		<entry name="Pict"/>
+		<entry name="Companion/Pict"/>
 		<entry name="SDT"/>
+		<entry name="Companion/SDT"/>
 		<entry name="EPS"/>
+		<entry name="Companion/EPS"/>
 		<entry name="Slidebook"/>
+		<entry name="Companion/Slidebook"/>
 		<entry name="Alicona"/>
+		<entry name="Companion/Alicona"/>
 		<entry name="MNG"/>
+		<entry name="Companion/MNG"/>
 		<entry name="NRRD"/>
+		<entry name="Companion/NRRD"/>
 		<entry name="Khoros"/>
+		<entry name="Companion/Khoros"/>
 		<entry name="Visitech"/>
+		<entry name="Companion/Visitech"/>
 		<entry name="LIM"/>
+		<entry name="Companion/LIM"/>
 		<entry name="PSD"/>
+		<entry name="Companion/PSD"/>
 		<entry name="InCell"/>
+		<entry name="Companion/InCell"/>
 		<entry name="ICS"/>
+		<entry name="Companion/ICS"/>
 		<entry name="PerkinElmer"/>
+		<entry name="Companion/PerkinElmer"/>
 		<entry name="TCS"/>
+		<entry name="Companion/TCS"/>
 		<entry name="FV1000"/>
+		<entry name="Companion/FV1000"/>
 		<entry name="ZeissZVI"/>
+		<entry name="Companion/ZeissZVI"/>
 		<entry name="IPW"/>
+		<entry name="Companion/IPW"/>
 		<entry name="LegacyND2"/>
+		<entry name="Companion/LegacyND2"/>
 		<entry name="ND2"/>
+		<entry name="Companion/ND2"/>
 		<entry name="PCI"/>
+		<entry name="Companion/PCI"/>
 		<entry name="ImarisHDF"/>
+		<entry name="Companion/ImarisHDF"/>
 		<entry name="Metamorph"/>
+		<entry name="Companion/Metamorph"/>
 		<entry name="ZeissLSM"/>
+		<entry name="Companion/ZeissLSM"/>
 		<entry name="SEQ"/>
+		<entry name="Companion/SEQ"/>
 		<entry name="Gel"/>
+		<entry name="Companion/Gel"/>
 		<entry name="ImarisTiff"/>
+		<entry name="Companion/ImarisTiff"/>
 		<entry name="Flex"/>
+		<entry name="Companion/Flex"/>
 		<entry name="SVS"/>
+		<entry name="Companion/SVS"/>
 		<entry name="Leica"/>
+		<entry name="Companion/Leica"/>
 		<entry name="Nikon"/>
+		<entry name="Companion/Nikon"/>
 		<entry name="Fluoview"/>
+		<entry name="Companion/Fluoview"/>
 		<entry name="Prairie"/>
+		<entry name="Companion/Prairie"/>
 		<entry name="Micromanager"/>
+		<entry name="Companion/Micromanager"/>
 		<entry name="ImprovisionTiff"/>
+		<entry name="Companion/ImprovisionTiff"/>
 		<entry name="OMETiff"/>
+		<entry name="Companion/OMETiff"/>
 		<entry name="MetamorphTiff"/>
+		<entry name="Companion/MetamorphTiff"/>
 		<entry name="Tiff"/>
+		<entry name="Companion/Tiff"/>
 		<entry name="Openlab"/>
+		<entry name="Companion/Openlab"/>
+		<entry name="MIAS"/>
+		<entry name="Companion/MIAS"/>
+                <!-- Standardized -->
 		<entry name="text/csv"/>
 		<entry name="text/plain"/>
 		<entry name="text/xml"/>
 		<entry name="text/html"/>
+		<entry name="text/ini"/>
 		<entry name="text/rtf"/>
 		<entry name="text/richtext"/>
 		<entry name="text/x-python"/>
@@ -590,6 +621,10 @@
 		<entry name="audio/basic"/>
 		<entry name="audio/mpeg"/>
 		<entry name="audio/wav"/>
+		<!-- Internal formats -->
+		<entry name="Repository"/>
+		<entry name="Directory"/>
+		<entry name="OMERO.tables"/>
 		<!-- Note: Other and Unknown are not needed use text/plain or application/octet-stream -->
 	</enum>
 <!-- Pixels Entity -->
@@ -605,7 +640,7 @@
 	<enum id="ome.model.enums.PixelsType">
 		<!-- Note: a combination of the objects PixelTypes and
 		     ExtendedPixelTypes from the model -->
-		<!-- Note: 'bit' is not implemented at present -->
+		<entry name="bit"/>
 		<entry name="int8"/>
 		<entry name="int16"/>
 		<entry name="int32"/>

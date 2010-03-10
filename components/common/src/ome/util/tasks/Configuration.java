@@ -43,13 +43,13 @@ import static ome.util.tasks.Configuration.Keys.*;
  * </code>
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1282 $, $Date: 2007-02-15 17:13:20 +0000 (Thu, 15 Feb 2007) $
  * @see Configuration
  * @see Task
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-02-15 17:13:20 +0000 (Thu, 15 Feb 2007) $")
+@RevisionNumber("$Revision: 1282 $")
 public class Configuration {
 
     /** Default package in which {@link Task} lookups will be performed. */

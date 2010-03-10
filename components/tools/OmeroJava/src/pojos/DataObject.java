@@ -7,8 +7,7 @@
 
 package pojos;
 
-import static omero.rtypes.rlong;
-
+//Java imports
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,6 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+//Third-party libraries
+
+//Application-internal dependencies
+import static omero.rtypes.rlong;
 import ome.model.IAnnotated;
 import ome.model.IMutable;
 import omero.model.Annotation;
@@ -139,7 +142,7 @@ public abstract class DataObject {
             converted = new TextualAnnotationData((CommentAnnotation) obj);
         } else if (obj instanceof LongAnnotation) {
             LongAnnotation ann = (LongAnnotation) obj;
-            if (RatingAnnotationData.INSIGHT_RATING_NS.equals(ann.getNs())) {
+            if (RatingAnnotationData.INSIGHT_RATING_NS.equals(ann.getNs().getValue())) {
                 converted = new RatingAnnotationData(ann);
             } else {
                 converted = new LongAnnotationData(ann);

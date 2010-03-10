@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: LoginTest.java 3352 2009-01-26 14:00:59Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

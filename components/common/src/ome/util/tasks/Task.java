@@ -39,12 +39,12 @@ import ome.system.ServiceFactory;
  * {@link #completedSuccessfully()} before attempting {@link #close()};
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 1568 $, $Date: 2007-05-30 20:03:03 +0100 (Wed, 30 May 2007) $
  * @see Runnable
  * @since 3.0-Beta1
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-05-30 20:03:03 +0100 (Wed, 30 May 2007) $")
+@RevisionNumber("$Revision: 1568 $")
 public abstract class Task implements Runnable {
 
     final private ServiceFactory sf;

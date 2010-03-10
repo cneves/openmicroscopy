@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: BeanHelper.java 1375 2007-03-20 11:23:44Z jmoore $
  *
  *   Copyright 2007 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -24,8 +24,8 @@ import org.springframework.context.ApplicationContextAware;
  * @author Josh Moore, josh.moore at gmx.de
  * @since 3.0-Beta2
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2007-03-20 11:23:44 +0000 (Tue, 20 Mar 2007) $")
+@RevisionNumber("$Revision: 1375 $")
 public class BeanHelper {
 
     private transient Class beanClass;

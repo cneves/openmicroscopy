@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: SimpleEventContext.java 2649 2008-07-30 20:58:47Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -19,13 +19,13 @@ import ome.model.internal.Permissions;
  * simple, non-thread-safe, serializable {@link ome.system.EventContext}
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision: 1167 $, $Date: 2006-12-15 11:39:34 +0100 (Fri, 15 Dec
+ * @version $Revision: 2649 $, $Date: 2006-12-15 11:39:34 +0100 (Fri, 15 Dec
  *          2006) $
  * @see EventContext
  * @since 3.0
  */
-@RevisionDate("$Date: 2006-12-15 11:39:34 +0100 (Fri, 15 Dec 2006) $")
-@RevisionNumber("$Revision: 1167 $")
+@RevisionDate("$Date: 2008-07-30 21:58:47 +0100 (Wed, 30 Jul 2008) $")
+@RevisionNumber("$Revision: 2649 $")
 public class SimpleEventContext implements EventContext, Serializable {
 
     private static final long serialVersionUID = -3918201598642845539L;

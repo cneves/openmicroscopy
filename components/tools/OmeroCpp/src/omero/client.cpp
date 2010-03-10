@@ -31,6 +31,8 @@ namespace omero {
 
 	// Strictly necessary for this class to work
 	id.properties->setProperty("Ice.ImplicitContext", "Shared");
+        id.properties->setProperty("Ice.ACM.Client", "0");
+        id.properties->setProperty("Ice.RetryIntervals", "-1");
 
 	// C++ only
 	std::string gcInterval = id.properties->getProperty("Ice.GC.Interval");
@@ -115,11 +117,7 @@ namespace omero {
 
 	// Register Object Factory
 	omero::registerObjectFactory(__ic);
-	map<std::string, omero::rtypes::ObjectFactoryPtr> factories = omero::rtypes::objectFactories();
-	map<std::string, omero::rtypes::ObjectFactoryPtr>::iterator itr;
-	for(itr = factories.begin(); itr != factories.end(); itr++) {
-	    (*itr).second->register_(__ic);
-	}
+        omero::rtypes::registerObjectFactory(__ic);
 
 	// Define our unique identifier (used during close/detach)
 	__uuid = IceUtil::generateUUID();

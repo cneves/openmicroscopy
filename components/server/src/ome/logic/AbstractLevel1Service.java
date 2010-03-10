@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: AbstractLevel1Service.java 3747 2009-02-24 10:28:13Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -27,7 +27,7 @@ import org.springframework.orm.hibernate3.support.HibernateDaoSupport;
  * service level 1
  * 
  * @author Josh Moore, <a href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date: 2006-12-15
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 3747 $ $Date: 2006-12-15
  *          11:39:34 +0100 (Fri, 15 Dec 2006) $) </small>
  * @since OMERO 3.0
  */

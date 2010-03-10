@@ -7,29 +7,29 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 
 <head>
-    <link rel="stylesheet" href="{% get_webadmin_static_url %}/css/layout.css" type="text/css" />
-    <link rel="stylesheet" href="{% get_webadmin_static_url %}/css/login.css" type="text/css" />
+    <link rel="stylesheet" href="{% url wastatic "css/layout.css" %}" type="text/css" />
+    <link rel="stylesheet" href="{% url wastatic "css/login.css" %}" type="text/css" />
 
-    <link rel="shortcut icon" href="{% get_webadmin_static_url %}/images/ome.ico" type="image/x-icon" />
+    <link rel="shortcut icon" href="{% url webstatic "images/ome.ico" %}" type="image/x-icon" />
 
     <title>{% trans "WebAdmin - Login" %}</title>
-
-    <script type="text/javascript" src="{% get_webadmin_static_url %}/javascript/popup.js"></script>
-
+    
 </head>
 <body>
 <div id="login-logo">
-    <img src="{% get_webadmin_static_url %}/images/logo.png" />
+    <img src="{% url wastatic "images/logo.png" %}" />
 </div>
 <div id="login">
-	<form action="{% get_webadmin_root_url %}/login/" method="post">
+	<form action="{% url walogin %}" method="post">
 		<table><tbody>
-		    {% if error %}<tr><th colspan="2"><ul class="errorlist"><li>{% trans "Error:" %} {{ error }}</li></ul></th><tr>{% endif %}
-		    <tr>
-		        <th>{% trans form.server.label_tag %}{% if form.server.field.required %}*{% endif %}</th>
-    				<td>{{ form.server.errors }}{{ form.server }}</td>
-		    </tr>
-		</tbody></table>
+            {% if error %}<tr><th colspan="2"><ul class="errorlist"><li>{% trans "Error:" %} {{ error }}</li></ul></th><tr>{% endif %}
+        </tbody></table>
+        <table><tbody>
+            <tr>
+                <th>{% trans form.server.label_tag %}{% if form.server.field.required %}*{% endif %}</th>
+                <td>{{ form.server }} {{ form.server.errors }}</td>
+            </tr>
+        </tbody></table>
 		<table><tbody>
 		    <tr>
 		        <th></th>
@@ -50,7 +50,7 @@
 </div>
 
 <div id="bottom">
-    <center><a href="{% get_webadmin_root_url %}/forgottenpassword/">Forgotten password</a> | <a href="javascript:openHelp()">Help</a></center>
+    <center><a href="{% url waforgottenpassword %}">Forgotten password</a> | <a href="javascript:openHelp()">Help</a></center>
 	<p>All material ©2008 OMERO Team</p>
 </div>
 

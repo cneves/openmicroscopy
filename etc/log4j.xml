@@ -15,17 +15,21 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Log configuration which is pointed to by the -Dlog4j.configuration setting in
-lib/omero/java.py but can be overwritten by setting omero.blitz.xargs. This
-file is periodically read during runtime, and any changes cause the log4j
+etc/grid/templates.xml
+
+This file is periodically read during runtime, and any changes cause the log4j
 system to be re-configured.
+
+Previously, pointed to by lib/omero/java.py but could be overwritten by setting
+omero.blitz.xargs.
 
 -->
 <log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/" debug="false">
 
   <appender name="PRIMARY" class="org.apache.log4j.RollingFileAppender">
     <errorHandler class="org.apache.log4j.helpers.OnlyOnceErrorHandler"/>
-    <param name="Threshold" value="INFO"/>
-    <param name="File" value="var/log/${omero.name}.log"/>
+    <param name="Threshold" value="DEBUG"/>
+    <param name="File" value="${omero.logfile}"/>
     <param name="MaxFileSize" value="500000KB"/>
     <param name="MaxBackupIndex" value="9"/>
     <param name="Append" value="true"/>
@@ -34,27 +38,18 @@ system to be re-configured.
     </layout>
   </appender>
 
-  <appender name="perf4jJmxAppender" class="org.perf4j.log4j.JmxAttributeStatisticsAppender">
-    <param name="TagNamesToExpose" value="omero.call"/>
+  <!-- PERF4J ///////////////////////////////////////////////////////////////// -->
+  <appender name="Perf4jJmxAppender" class="org.perf4j.log4j.JmxAttributeStatisticsAppender">
+    <param name="TagNamesToExpose" value="omero.call.success,omero.call.exception,omero.session"/>
   </appender>
-
-  <appender name="fileAppender" class="org.apache.log4j.FileAppender">
-    <param name="File" value="var/log/${omero.name}.stats"/>
-    <layout class="org.apache.log4j.PatternLayout">
-      <param name="ConversionPattern" value="%m%n"/>
-    </layout>
-  </appender>
-
   <appender name="CoalescingStatistics" class="org.perf4j.log4j.AsyncCoalescingStatisticsAppender">
-    <param name="TimeSlice" value="10000"/>
-    <appender-ref ref="fileAppender"/>
-    <appender-ref ref="perf4jJmxAppender"/>
+    <param name="TimeSlice" value="300000"/>
+    <appender-ref ref="Perf4jJmxAppender"/>
   </appender>
-
-  <logger name="org.perf4j.TimingLogger" additivity="false">
+  <category name="org.perf4j.TimingLogger">
     <level value="INFO"/>
     <appender-ref ref="CoalescingStatistics"/>
-  </logger>
+  </category>
 
   <!-- INTERNAL /////////////////////////////////////////////////////////////// -->
   <category name="ome"> <priority value="INFO"/> </category>
@@ -66,6 +61,7 @@ system to be re-configured.
   <category name="ome.system.PreferenceContext"> <priority value="WARN"/> </category>
   <category name="ome.security.basic.CurrentDetails"> <priority value="INFO"/> </category>
   <category name="ome.services.blitz.impl.ServiceFactoryI"> <priority value="INFO"/> </category>
+  <category name="ome.services.blitz.impl.OmeroMetadata"> <priority value="INFO"/> </category>
   <category name="ome.services.blitz.util.ShutdownSafeEhcacheManagerFactoryBean"> <priority value="WARN"/> </category>
   <!-- Adapters are also too so is a bit verbose -->
   <category name="ome.adapters"> <priority value="ERROR"/> </category>

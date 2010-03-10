@@ -41,18 +41,11 @@ from django.template import RequestContext as Context
 from django.views.defaults import page_not_found, server_error
 from django.views import debug
 
+from omeroweb.feedback.sendfeedback import SendFeedback 
 from omeroweb.feedback.models import ErrorForm
-from omeroweb.extlib.notification.sendfeedback import SendFeedback
 
 logger = logging.getLogger('views-feedback')
 
-try:
-    if settings.ERROR2EMAIL_NOTIFICATION and settings.EMAIL_NOTIFICATION:
-        import omeroweb.extlib.notification.handlesender as sender
-        logger.info("Email sender imported")
-except:
-    logger.error(traceback.format_exc())
-    
 ###############################################################################
 def thanks(request):
     return render_to_response("thanks.html",None)
@@ -113,14 +106,6 @@ def handler500(request):
     
     error500 = debug.technical_500_response(request, *exc_info)
     
-    if settings.ERROR2EMAIL_NOTIFICATION and settings.EMAIL_NOTIFICATION:
-        try:
-            sender.handler().create_error_message("OMERO.web", request.session['username'], error500)
-            logger.info('handler500: Email to queue')
-        except:
-            logger.error('handler500: Email could not be sent')
-            logger.error(traceback.format_exc())
-    
     return custom_server_error(request, error500)
 
 def handler404(request):
@@ -128,13 +113,7 @@ def handler404(request):
     exc_info = sys.exc_info()
     logger.error(traceback.format_exc())
     
-    if settings.ERROR2EMAIL_NOTIFICATION and settings.EMAIL_NOTIFICATION:
-        try:
-            sender.handler().create_error_message("OMERO.web", request.session['username'], debug.technical_404_response(request, exc_info[1]))
-            logger.info('handler404: Email to queue')
-        except:
-            logger.error('handler404: Email could not be sent')
-            logger.error(traceback.format_exc())
+    error404 = debug.technical_404_response(request, exc_info[1])
     
     return page_not_found(request, "404.html")
 

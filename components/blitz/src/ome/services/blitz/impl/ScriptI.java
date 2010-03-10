@@ -18,6 +18,7 @@ import ome.api.IUpdate;
 import ome.api.RawFileStore;
 import ome.model.core.OriginalFile;
 import ome.model.enums.Format;
+import ome.model.internal.Permissions;
 import ome.model.jobs.JobOriginalFileLink;
 import ome.parameters.Parameters;
 import ome.services.blitz.util.BlitzExecutor;
@@ -27,6 +28,7 @@ import ome.services.util.Executor;
 import ome.system.ServiceFactory;
 import ome.util.Utils;
 import omero.ApiUsageException;
+import omero.InternalException;
 import omero.RType;
 import omero.ServerError;
 import omero.ValidationException;
@@ -45,6 +47,8 @@ import omero.grid.Param;
 import omero.model.OriginalFileI;
 import omero.model.ScriptJobI;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.hibernate.Session;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +65,8 @@ import Ice.Current;
 public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         ServiceFactoryAware, BlitzOnly {
 
+    private final static Log log = LogFactory.getLog(ScriptI.class);
+    
     /** The text representation of the format in a python script. */
     private final static String PYTHONSCRIPT = "text/x-python";
 
@@ -140,11 +146,15 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                     }
 
                     if (originalFileExists(params.name)) {
+                        OriginalFile file = getOriginalFileOrNull(params.name);
+                        if (file == null) {
+                            cb.ice_exception(new ApiUsageException(null, null,
+                                    "Script error: cannot overwrite file."));
+                            return; // EARLY EXIT
+                        }
+                        writeContent(file, script);
                         deleteOriginalFile(tempFile);
-                        cb.ice_exception(new ApiUsageException(null, null,
-                                "A script with name " + params.name
-                                        + " already exists on server."));
-                        return; // EARLY EXIT
+                        cb.ice_response(file.getId());
                     }
 
                     tempFile.setName(params.name);
@@ -199,8 +209,9 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                 try {
                     Map<String, RType> scr = new HashMap<String, RType>();
                     scr.put((String) factory.executor.execute(
-                            factory.principal, new Executor.SimpleWork(this, "getScriptWithDetails") {
-                                @Transactional(readOnly=true)
+                            factory.principal, new Executor.SimpleWork(this,
+                                    "getScriptWithDetails") {
+                                @Transactional(readOnly = true)
                                 public Object doWork(Session session,
                                         ServiceFactory sf) {
                                     RawFileStore rawFileStore = sf
@@ -259,9 +270,10 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
 
                 try {
                     cb.ice_response((String) factory.executor.execute(
-                            factory.principal, new Executor.SimpleWork(this, "getScript") {
+                            factory.principal, new Executor.SimpleWork(this,
+                                    "getScript") {
 
-				    @Transactional(readOnly=true)
+                                @Transactional(readOnly = true)
                                 public Object doWork(Session session,
                                         ServiceFactory sf) {
                                     RawFileStore rawFileStore = sf
@@ -333,23 +345,50 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         runnableCall(__current, new Runnable() {
 
             public void run() {
+
+                InteractiveProcessorPrx proc = null;
+
                 try {
 
-                    Map<String, RType> params = getParams(id, __current);
-                    for (Map.Entry<String, RType> entry : params.entrySet()) {
+                    log.info(String.format(
+                            "runScript: %s param keys: %s",
+                            id, map == null ? null : map.keySet()));
+
+                    ScriptJobI job = buildJob(id);
+                    proc = factory.sharedResources().acquireProcessor(job, 10);
+                    JobParams params = proc.params();
+                    
+                    if (params == null) {
+                        cb
+                                .ice_exception(new ApiUsageException(
+                                        null,
+                                        null,
+                                        "Script has returned no parameters this "
+                                                + "indicates that the script may have crashed."));
+                        return; // EARLY EXIT
+
+                    }
+                    for (Map.Entry<String, Param> entry : params.inputs.entrySet()) {
                         String paramName = entry.getKey();
-                        RType scriptParamType = entry.getValue();
-                        if (!map.containsKey(paramName)) {
-                            cb
+                        Param param = entry.getValue();
+                        RType scriptParamType = param.prototype;
+                        RType inputParamType = map.get(paramName);
+
+                        if (inputParamType == null) {
+                            if (param.optional) {
+                                continue;
+                            } else {
+                                cb
                                     .ice_exception(new ApiUsageException(
                                             null,
                                             null,
-                                            "Script takes parameter "
+                                            "Script takes required parameter "
                                                     + paramName
                                                     + " which has not supplied input params to runScript."));
-                            return; // EARLY EXIT
+                                return; // EARLY EXIT
+                            }
                         }
-                        RType inputParamType = map.get(paramName);
+
                         if (!scriptParamType.getClass().equals(
                                 inputParamType.getClass())) {
                             cb
@@ -366,14 +405,29 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                             return; // EARLY EXIT
                         }
                     }
-                    ScriptJobI job = buildJob(id);
-                    InteractiveProcessorPrx proc = factory.acquireProcessor(
-                            job, 10, __current);
+
                     omero.grid.ProcessPrx prx = proc.execute(rmap(map));
                     prx._wait();
-                    cb.ice_response(proc.getResults(prx).getValue());
+                    Map<String, RType> results = proc.getResults(prx)
+                            .getValue();
+                    if (results == null) {
+                        cb.ice_exception(new ApiUsageException(null, null,
+                                "Script has returned null this indicates "
+                                        + "that the script may have crashed."));
+                        return; // EARLY EXIT
+
+                    }
+                    cb.ice_response(results);
                 } catch (Exception e) {
                     cb.ice_exception(e);
+                } finally {
+                    if (proc != null) {
+                        try {
+                            proc.stop();
+                        } catch (Exception e) {
+                            log.warn("Err on proc.stop(): " + e.getMessage());
+                        }
+                    }
                 }
             }
         });
@@ -402,7 +456,7 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                     factory.executor.execute(factory.principal,
                             new Executor.SimpleWork(this, "getScripts") {
 
-				@Transactional(readOnly=true)
+                                @Transactional(readOnly = true)
                                 public Object doWork(Session session,
                                         ServiceFactory sf) {
                                     List<OriginalFile> fileList = sf
@@ -460,6 +514,8 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
             throws ServerError {
         OriginalFile file = getOriginalFileOrNull(id);
         JobParams params = getScriptParams(file, __current);
+        if (params == null)
+            return null;
         Map<String, RType> temporary = new HashMap<String, RType>();
         for (String key : params.inputs.keySet()) {
             Param p = params.inputs.get(key);
@@ -485,8 +541,11 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                     + " is not persistent.");
         }
         ScriptJobI job = buildJob(file.getId());
-        InteractiveProcessorPrx proc = this.factory.acquireProcessor(job, 10,
-                __current);
+        InteractiveProcessorPrx proc = this.factory.sharedResources()
+                .acquireProcessor(job, 10);
+        if (proc == null) {
+            throw new InternalException(null, null, "No processor acquired.");
+        }
         JobParams rv = proc.params();
         deleteTempJob(proc.getJob().getId().getValue());
         return rv;
@@ -509,6 +568,8 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         tempFile.setFormat(getFormat(PYTHONSCRIPT));
         tempFile.setSize((long) script.getBytes().length);
         tempFile.setSha1(Utils.bufferToSha1(script.getBytes()));
+        // Make sure that the file is readable #1315
+        tempFile.getDetails().setPermissions(Permissions.PUBLIC);
         return updateFile(tempFile);
     }
 
@@ -524,9 +585,10 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         OriginalFile updatedFile = (OriginalFile) factory.executor.execute(
                 factory.principal, new Executor.SimpleWork(this, "updateFile") {
 
-			@Transactional(readOnly=false)
+                    @Transactional(readOnly = false)
                     public Object doWork(Session session, ServiceFactory sf) {
                         IUpdate update = sf.getUpdateService();
+                        file.getDetails().setUpdateEvent(null);
                         return update.saveAndReturnObject(file);
                     }
 
@@ -546,8 +608,9 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
      */
     private void writeContent(final OriginalFile file, final String script)
             throws ServerError {
-        factory.executor.execute(factory.principal, new Executor.SimpleWork(this, "writeContent") {
-		@Transactional(readOnly=true)
+        factory.executor.execute(factory.principal, new Executor.SimpleWork(
+                this, "writeContent") {
+            @Transactional(readOnly = true)
             public Object doWork(Session session, ServiceFactory sf) {
 
                 RawFileStore rawFileStore = sf.createRawFileStore();
@@ -582,7 +645,7 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         Boolean success = (Boolean) factory.executor.execute(factory.principal,
                 new Executor.SimpleWork(this, "deleteTempJob") {
 
-		    @Transactional(readOnly=false)
+                    @Transactional(readOnly = false)
                     public Object doWork(Session session, ServiceFactory sf) {
                         try {
                             IUpdate update = sf.getUpdateService();
@@ -614,7 +677,7 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         Boolean success = (Boolean) factory.executor.execute(factory.principal,
                 new Executor.SimpleWork(this, "deleteOriginalFile") {
 
-		    @Transactional(readOnly=false)
+                    @Transactional(readOnly = false)
                     public Object doWork(Session session, ServiceFactory sf) {
                         IUpdate update = sf.getUpdateService();
                         List<JobOriginalFileLink> links = sf.getQueryService()
@@ -659,9 +722,10 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                 + " and o.name = '"
                 + fileName + "'";
         List<OriginalFile> fileList = (List<OriginalFile>) factory.executor
-                .execute(factory.principal, new Executor.SimpleWork(this, "originalFileExists") {
+                .execute(factory.principal, new Executor.SimpleWork(this,
+                        "originalFileExists") {
 
-			@Transactional(readOnly=true)
+                    @Transactional(readOnly = true)
                     public Object doWork(Session session, ServiceFactory sf) {
                         return sf.getQueryService().findAllByQuery(queryString,
                                 null);
@@ -694,9 +758,10 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
                     + " and o.name = '"
                     + name + "'";
             OriginalFile file = (OriginalFile) factory.executor.execute(
-                    factory.principal, new Executor.SimpleWork(this, "getOriginalFileOrNull") {
+                    factory.principal, new Executor.SimpleWork(this,
+                            "getOriginalFileOrNull") {
 
-			    @Transactional(readOnly=true)
+                        @Transactional(readOnly = true)
                         public Object doWork(Session session, ServiceFactory sf) {
                             return sf.getQueryService().findByQuery(
                                     queryString, null);
@@ -724,9 +789,10 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
             final String queryString = "from OriginalFile as o where o.format.id = "
                     + getFormat(PYTHONSCRIPT).getId() + " and o.id = " + id;
             OriginalFile file = (OriginalFile) factory.executor.execute(
-                    factory.principal, new Executor.SimpleWork(this, "getOriginalFileOrNull") {
+                    factory.principal, new Executor.SimpleWork(this,
+                            "getOriginalFileOrNull") {
 
-			    @Transactional(readOnly=true)
+                        @Transactional(readOnly = true)
                         public Object doWork(Session session, ServiceFactory sf) {
                             return sf.getQueryService().findByQuery(
                                     queryString, null);
@@ -749,7 +815,7 @@ public class ScriptI extends AbstractAmdServant implements _IScriptOperations,
         return (Format) factory.executor.execute(factory.principal,
                 new Executor.SimpleWork(this, "getFormat") {
 
-		    @Transactional(readOnly=true)
+                    @Transactional(readOnly = true)
                     public Object doWork(Session session, ServiceFactory sf) {
                         return sf.getQueryService().findByQuery(
                                 "from Format as f where f.value='"

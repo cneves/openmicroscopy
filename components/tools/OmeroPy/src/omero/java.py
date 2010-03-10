@@ -8,8 +8,23 @@
 import os, shlex
 import platform
 import subprocess
+import exceptions
+import logging
+
 
 DEFAULT_DEBUG = "-Xrunjdwp:server=y,transport=dt_socket,address=8787,suspend=n"
+
+def check_java(command):
+    try:
+        p = subprocess.Popen([command[0],"-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        std = p.communicate()
+        rc = p.wait()
+        if rc == 0:
+            return
+    except:
+        pass # Falls through to raise
+
+    raise exceptions.Exception("Java could not be found. (Executable=%s)" % command[0])
 
 def makeVar(key, env):
         if os.environ.has_key(key):
@@ -38,10 +53,7 @@ def cmd(args,\
     command += [ "-Dlog4j.configuration=%s" % os.path.join("etc", "log4j.xml") ]
 
     # Preapre arguments
-    if xargs == None:
-        if os.environ.has_key("JAVA_OPTS"):
-            command += shlex.split(os.environ["JAVA_OPTS"])
-    else:
+    if xargs != None:
         command += xargs
 
     # Prepare debugging
@@ -51,6 +63,10 @@ def cmd(args,\
     else:
         if debug:
             command += ["-Xdebug",debug_string]
+
+    # Add JAVA_OPTS at the end. ticket:1439
+    if os.environ.has_key("JAVA_OPTS"):
+        command += shlex.split(os.environ["JAVA_OPTS"])
 
     # Do any mandatory configuration very late
     command += [ "-Djava.awt.headless=true" ]
@@ -80,6 +96,7 @@ def run(args,\
     If more control over the debugging configuration is needed, pass debug_string.
     """
     command = cmd(args, java, xargs, chdir, debug, debug_string)
+    check_java(command)
     if use_exec:
         env = os.environ
         if chdir:
@@ -100,13 +117,15 @@ def popen(args,\
         chdir = None,\
         debug = None,\
         debug_string = DEFAULT_DEBUG,\
-        stdout = subprocess.PIPE):
+        stdout = subprocess.PIPE,\
+        stderr = subprocess.PIPE):
     """
     Creates a subprocess.Popen object and returns it. Uses cmd() internally to create
     the Java command to be executed. This is the same logic as run(use_exec=False) but
     the Popen is returned rather than the stdout.
     """
     command = cmd(args, java, xargs, chdir, debug, debug_string)
+    check_java(command)
     if not chdir:
         chdir = os.getcwd()
-    return subprocess.Popen(command, stdout=stdout, cwd=chdir, env = os.environ)
+    return subprocess.Popen(command, stdout=stdout, stderr=stderr, cwd=chdir, env = os.environ)

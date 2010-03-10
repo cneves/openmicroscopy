@@ -67,7 +67,7 @@ import pojos.TextualAnnotationData;
 /**
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 2263 $ $Date: 2008-02-25 09:06:13 +0000 (Mon, 25 Feb 2008) $) </small>
  * @since 2.0
  */
 @Test(groups = { "client", "integration" })

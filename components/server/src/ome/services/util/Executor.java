@@ -184,8 +184,25 @@ public interface Executor extends ApplicationContextAware {
 
         final private String description;
 
-        public SimpleWork(Object o, String method) {
-            this.description = o.getClass().getName() + "." + method;
+        public SimpleWork(Object o, String method, Object...params) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(o.getClass().getName());
+            sb.append(".");
+            sb.append(method);
+            boolean first = true;
+            if (params.length > 0) {
+                sb.append("(");
+                for (Object object : params) {
+                    if (first) {
+                        first = false;
+                    } else {
+                        sb.append(", ");
+                    }
+                    sb.append(object);
+                }
+                sb.append(")");
+            }
+            this.description = sb.toString();
         }
 
         public String description() {

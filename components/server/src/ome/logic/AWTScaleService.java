@@ -26,7 +26,7 @@ import ome.api.IScale;
  * 
  * @author Chris Allan &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:callan@blackcat.ca">callan@blackcat.ca</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Rev$ $Date$) </small>
+ * @version 3.0 <small> (<b>Internal version:</b> $Rev: 2588 $ $Date: 2008-07-03 09:20:35 +0100 (Thu, 03 Jul 2008) $) </small>
  * @since 3.0
  * 
  */

@@ -109,14 +109,24 @@ public class Entry {
                     // But just in case, future code changes should introduce
                     // an exception (and to make findbugs happy) we'll add the
                     // try/finally
+                    instance.lock.unlock();
                 }
             }
         };
 
-        Signal.handle(new Signal("INT"), handler);
-        Signal.handle(new Signal("TERM"), handler);
+        registerSignal(handler, "INT");
+        registerSignal(handler, "TERM");
+        registerSignal(handler, "BREAK");
 
         instance.start();
+    }
+
+    private static void registerSignal(SignalHandler handler, String sig) {
+        try {
+            Signal.handle(new Signal(sig), handler);
+        } catch (IllegalArgumentException iae) {
+            // Ok. BREAK will not exist on non-Windows systems, for example.
+        }
     }
 
     /**
@@ -127,8 +137,33 @@ public class Entry {
         this.name = name;
     }
 
+    /**
+     * Most ome/omero classes use the {@link Log} and {@link LogFactory}
+     * classes for logging. The underlying implementation, however, is
+     * more complicated. To prevent a dependency on third party jars,
+     * the Ice Logger prints to java.util.logging. Log4j is on the class-
+     * path and so is used as the main logger. And slf4j is also bound
+     * to log4j, which allows us to use the Slf4J java.util.logging bridge
+     * to send JUL to log4j as well. In summary:
+     * <pre>
+     *
+     *  Most classes --> commons logging
+     *                       \
+     *                        \------------> log4j
+     *                        /
+     *                 slf4j-/
+     *                   ^
+     * java.util.logging-|
+     *      ^
+     * Ice--|
+     *
+     * </pre>
+     */
     public static void configureLogging() {
         try {
+
+            org.slf4j.bridge.SLF4JBridgeHandler.install();
+
             String log4j_xml = System.getProperty("log4j.configuration", "");
             if (log4j_xml.length() == 0) {
                 File file = ResourceUtils.getFile("classpath:log4j.xml");
@@ -169,6 +204,9 @@ public class Entry {
             if (ctx.containsBean("Ice.Communicator")) {
                 ic = (Ice.Communicator) ctx.getBean("Ice.Communicator");
             } else {
+                // TODO This should be adapted to work for any process
+                // that doesn't need to add servants. Here "Indexer" could
+                // be replaced by omero.name or similar.
                 ic = Ice.Util.initialize(id);
                 Ice.ObjectAdapter oa = ic.createObjectAdapter("IndexerAdapter");
                 oa.activate();

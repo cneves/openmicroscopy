@@ -1,5 +1,5 @@
 /*
- *   $Id$
+ *   $Id: SystemTypesTest.java 2441 2008-05-29 14:54:13Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt

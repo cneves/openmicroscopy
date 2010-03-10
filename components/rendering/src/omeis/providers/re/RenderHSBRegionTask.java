@@ -16,6 +16,7 @@ import org.apache.commons.logging.LogFactory;
 import ome.io.nio.PixelData;
 import omeis.providers.re.codomain.CodomainChain;
 import omeis.providers.re.data.Plane2D;
+import omeis.providers.re.quantum.BinaryMaskQuantizer;
 import omeis.providers.re.quantum.QuantizationException;
 import omeis.providers.re.quantum.QuantumStrategy;
 
@@ -26,7 +27,7 @@ import omeis.providers.re.quantum.QuantumStrategy;
  * 
  * @author Chris Allan &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:callan@blackcat.ca">callan@blackat.ca</a>
- * @version 3.0 <small> (<b>Internal version:</b> $Revision$ $Date:
+ * @version 3.0 <small> (<b>Internal version:</b> $Revision: 5743 $ $Date:
  *          2005/06/17 12:57:33 $) </small>
  * @since OMERO3.0
  */
@@ -206,6 +207,7 @@ class RenderHSBRegionTask implements RenderingTask {
         for (Plane2D plane : wData) {
             int[] color = colors.get(i);
             QuantumStrategy qs = strategies.get(i);
+            boolean isMask = qs instanceof BinaryMaskQuantizer? true : false;
             redRatio = color[ColorsFactory.RED_INDEX] > 0? color[ColorsFactory.RED_INDEX] / 255.0 : 0.0;
             greenRatio = color[ColorsFactory.GREEN_INDEX] > 0? color[ColorsFactory.GREEN_INDEX] / 255.0 : 0.0;
             blueRatio = color[ColorsFactory.BLUE_INDEX] > 0? color[ColorsFactory.BLUE_INDEX] / 255.0 : 0.0;
@@ -257,6 +259,17 @@ class RenderHSBRegionTask implements RenderingTask {
                     	newBValue *= alpha;
                     }
 
+                    if (isMask && discreteValue == 255) {
+                    	// Since the mask is a hard value, we do not want to
+                    	// compromise on colour fidelity. Packed each colour
+                    	// component along with a 1.0 alpha into the buffer so
+                    	// that buffered images that use this buffer can be
+                    	// type 1 (3 bands, pre-multiplied alpha) or type 2
+                        // (4 bands, alpha component included).
+                        buf[pix] = 0xFF000000 | newRValue << 16
+                                   | newGValue << 8 | newBValue;
+                        continue;
+                    }
                     // Add the existing colour component values to the new
                     // colour component values.
                     rValue = ((buf[pix] & 0x00FF0000) >> 16) + newRValue;

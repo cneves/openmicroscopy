@@ -20,13 +20,13 @@ import ome.model.internal.Permissions;
  * order), they also take place within an Event.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision$, $Date$
+ * @version $Revision: 2648 $, $Date: 2008-07-30 21:58:45 +0100 (Wed, 30 Jul 2008) $
  * @see ome.model.meta.Experimenter
  * @see ome.model.meta.ExperimenterGroup
  * @since 3.0
  */
-@RevisionDate("$Date$")
-@RevisionNumber("$Revision$")
+@RevisionDate("$Date: 2008-07-30 21:58:45 +0100 (Wed, 30 Jul 2008) $")
+@RevisionNumber("$Revision: 2648 $")
 public interface EventContext {
 
     Long getCurrentShareId();

@@ -54,7 +54,7 @@ import ome.model.screen.WellSample;
  * @author <br>
  *         Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.more@gmx.de"> josh.moore@gmx.de</a>
- * @version 2.2 <small> (<b>Internal version:</b> $Revision$ $Date$) </small>
+ * @version 2.2 <small> (<b>Internal version:</b> $Revision: 3350 $ $Date: 2009-01-26 13:53:23 +0000 (Mon, 26 Jan 2009) $) </small>
  * @since OME2.2
  */
 public abstract class DataObject {

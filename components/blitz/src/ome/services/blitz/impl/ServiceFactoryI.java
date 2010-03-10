@@ -12,10 +12,10 @@ import java.util.List;
 
 import net.sf.ehcache.Ehcache;
 import net.sf.ehcache.Element;
-import ome.api.JobHandle;
 import ome.conditions.SessionException;
 import ome.logic.HardWiredInterceptor;
 import ome.services.blitz.fire.AopContextInitializer;
+import ome.services.blitz.fire.Registry;
 import ome.services.blitz.fire.TopicManager;
 import ome.services.blitz.util.ServantHolder;
 import ome.services.blitz.util.ServiceFactoryAware;
@@ -28,25 +28,28 @@ import ome.system.ServiceFactory;
 import omero.ApiUsageException;
 import omero.InternalException;
 import omero.ServerError;
+import omero.ShutdownInProgress;
 import omero.api.AMD_StatefulServiceInterface_close;
 import omero.api.ClientCallbackPrx;
 import omero.api.ClientCallbackPrxHelper;
+import omero.api.ExporterPrx;
+import omero.api.ExporterPrxHelper;
 import omero.api.GatewayPrx;
 import omero.api.GatewayPrxHelper;
 import omero.api.IAdminPrx;
 import omero.api.IAdminPrxHelper;
 import omero.api.IConfigPrx;
 import omero.api.IConfigPrxHelper;
+import omero.api.IContainerPrx;
+import omero.api.IContainerPrxHelper;
 import omero.api.IDeletePrx;
 import omero.api.IDeletePrxHelper;
 import omero.api.ILdapPrx;
 import omero.api.ILdapPrxHelper;
-import omero.api.IPixelsPrx;
-import omero.api.IPixelsPrxHelper;
-import omero.api.IContainerPrx;
-import omero.api.IContainerPrxHelper;
 import omero.api.IMetadataPrx;
 import omero.api.IMetadataPrxHelper;
+import omero.api.IPixelsPrx;
+import omero.api.IPixelsPrxHelper;
 import omero.api.IProjectionPrx;
 import omero.api.IProjectionPrxHelper;
 import omero.api.IQueryPrx;
@@ -55,6 +58,8 @@ import omero.api.IRenderingSettingsPrx;
 import omero.api.IRenderingSettingsPrxHelper;
 import omero.api.IRepositoryInfoPrx;
 import omero.api.IRepositoryInfoPrxHelper;
+import omero.api.IRoiPrx;
+import omero.api.IRoiPrxHelper;
 import omero.api.IScriptPrx;
 import omero.api.IScriptPrxHelper;
 import omero.api.ISessionPrx;
@@ -89,6 +94,7 @@ import omero.constants.CLIENTUUID;
 import omero.constants.CONFIGSERVICE;
 import omero.constants.CONTAINERSERVICE;
 import omero.constants.DELETESERVICE;
+import omero.constants.EXPORTERSERVICE;
 import omero.constants.GATEWAYSERVICE;
 import omero.constants.JOBHANDLE;
 import omero.constants.LDAPSERVICE;
@@ -101,22 +107,19 @@ import omero.constants.RAWPIXELSSTORE;
 import omero.constants.RENDERINGENGINE;
 import omero.constants.RENDERINGSETTINGS;
 import omero.constants.REPOSITORYINFO;
+import omero.constants.ROISERVICE;
 import omero.constants.SCRIPTSERVICE;
 import omero.constants.SEARCH;
 import omero.constants.SESSIONSERVICE;
+import omero.constants.SHAREDRESOURCES;
 import omero.constants.SHARESERVICE;
 import omero.constants.THUMBNAILSTORE;
 import omero.constants.TIMELINESERVICE;
 import omero.constants.TYPESSERVICE;
 import omero.constants.UPDATESERVICE;
 import omero.grid.InteractiveProcessorI;
-import omero.grid.InteractiveProcessorPrx;
-import omero.grid.InteractiveProcessorPrxHelper;
-import omero.grid.ProcessorPrx;
-import omero.grid.ProcessorPrxHelper;
-import omero.model.Job;
-import omero.model.JobStatus;
-import omero.model.JobStatusI;
+import omero.grid.SharedResourcesPrx;
+import omero.grid.SharedResourcesPrxHelper;
 import omero.util.IceMapper;
 
 import org.aopalliance.aop.Advice;
@@ -127,7 +130,6 @@ import org.hibernate.Session;
 import org.springframework.aop.Advisor;
 import org.springframework.aop.framework.Advised;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
-import org.springframework.transaction.annotation.Transactional;
 
 import Ice.ConnectTimeoutException;
 import Ice.ConnectionLostException;
@@ -159,6 +161,8 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
     boolean doClose = true;
 
     public final String clientId;
+    
+    public final Glacier2.SessionControlPrx control;
 
     private ClientCallbackPrx callback;
 
@@ -172,6 +176,8 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
     final SessionManager sessionManager;
 
     final TopicManager topicManager;
+
+    final Registry registry;
 
     /**
      * {@link Executor} to be used by servant implementations which do not
@@ -193,10 +199,13 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
     // ~ Initialization and context methods
     // =========================================================================
 
-    public ServiceFactoryI(Ice.Current current, OmeroContext context,
+    public ServiceFactoryI(Ice.Current current, Glacier2.SessionControlPrx control,
+            OmeroContext context,
             SessionManager manager, Executor executor, Principal p,
-            List<HardWiredInterceptor> interceptors) throws ApiUsageException {
+            List<HardWiredInterceptor> interceptors, TopicManager topicManager,
+            Registry registry) throws ApiUsageException {
         this.adapter = current.adapter;
+        this.control = control;
         this.clientId = clientId(current);
         this.context = context;
         this.sessionManager = manager;
@@ -205,9 +214,8 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
         this.cptors = interceptors;
         this.initializer = new AopContextInitializer(new ServiceFactory(
                 this.context), this.principal);
-        // TODO Move this to injection.
-        // FIXME
-        this.topicManager = null; // (TopicManager) context.getBean("topicManager");
+        this.topicManager = topicManager;
+        this.registry = registry;
 
         // Setting up in memory store.
         Ehcache cache = manager.inMemoryCache(p.getName());
@@ -262,9 +270,10 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
                 current));
     }
 
-    public IContainerPrx getContainerService(Ice.Current current) throws ServerError {
-        return IContainerPrxHelper.uncheckedCast(getByName(CONTAINERSERVICE.value,
-                current));
+    public IContainerPrx getContainerService(Ice.Current current)
+            throws ServerError {
+        return IContainerPrxHelper.uncheckedCast(getByName(
+                CONTAINERSERVICE.value, current));
     }
 
     public IProjectionPrx getProjectionService(Ice.Current current)
@@ -276,6 +285,11 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
     public IQueryPrx getQueryService(Ice.Current current) throws ServerError {
         return IQueryPrxHelper.uncheckedCast(getByName(QUERYSERVICE.value,
                 current));
+    }
+
+    public IRoiPrx getRoiService(Ice.Current current) throws ServerError {
+        Ice.ObjectPrx prx = getByName(ROISERVICE.value, current);
+        return IRoiPrxHelper.uncheckedCast(prx);
     }
 
     public IScriptPrx getScriptService(Ice.Current current) throws ServerError {
@@ -305,8 +319,9 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
     }
 
     public IUpdatePrx getUpdateService(Ice.Current current) throws ServerError {
-        return IUpdatePrxHelper.uncheckedCast(getByName(UPDATESERVICE.value,
-                current));
+        Ice.ObjectPrx prx = getByName(UPDATESERVICE.value, current);
+        return IUpdatePrxHelper.uncheckedCast(prx);
+
     }
 
     public IRenderingSettingsPrx getRenderingSettingsService(Ice.Current current)
@@ -322,13 +337,18 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
     }
 
     public IMetadataPrx getMetadataService(Ice.Current current)
-    throws ServerError {
+            throws ServerError {
         return IMetadataPrxHelper.uncheckedCast(getByName(
-                        METADATASERVICE.value, current));
+                METADATASERVICE.value, current));
     }
-    
+
     // ~ Stateful
     // =========================================================================
+
+    public ExporterPrx createExporter(Current current) throws ServerError {
+        return ExporterPrxHelper.uncheckedCast(createByName(
+                EXPORTERSERVICE.value, current));
+    }
 
     public GatewayPrx createGateway(Ice.Current current) throws ServerError {
         return GatewayPrxHelper.uncheckedCast(createByName(
@@ -372,6 +392,11 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
 
     // ~ Other interface methods
     // =========================================================================
+
+    public SharedResourcesPrx sharedResources(Current current) throws ServerError {
+        return SharedResourcesPrxHelper.uncheckedCast(createByName(
+                SHAREDRESOURCES.value, current));
+    }
 
     public ServiceInterfacePrx getByName(String name, Current current)
             throws ServerError {
@@ -422,121 +447,6 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
         log.info("Registered " + prx + " for " + topicName);
     }
 
-    public InteractiveProcessorPrx acquireProcessor(final Job submittedJob,
-            int seconds, Current current) throws ServerError {
-
-        if (seconds > (3 * 60)) {
-            ApiUsageException aue = new ApiUsageException();
-            aue.message = "Delay is too long. Maximum = 3 minutes.";
-        }
-
-        final IceMapper mapper = new IceMapper();
-
-        // First create the job with a status of WAITING.
-        // The InteractiveProcessor will be responsible for its
-        // further lifetime.
-        final ome.model.jobs.Job savedJob = (ome.model.jobs.Job) this.executor
-                .execute(this.principal, new Executor.SimpleWork(this, "submitJob") {
-                    @Transactional(readOnly = false)
-                    public ome.model.jobs.Job doWork(Session session,
-                            ServiceFactory sf) {
-
-                        final JobHandle handle = sf.createJobHandle();
-                        try {
-                            JobStatus status = new JobStatusI();
-                            status.setValue(omero.rtypes
-                                    .rstring(JobHandle.WAITING));
-                            submittedJob.setStatus(status);
-                            submittedJob.setMessage(omero.rtypes
-                                    .rstring("Interactive job. Waiting."));
-
-                            handle.submit((ome.model.jobs.Job) mapper
-                                    .reverse(submittedJob));
-                            return handle.getJob();
-                        } catch (ApiUsageException e) {
-                            return null;
-                        } finally {
-                            if (handle != null) {
-                                handle.close();
-                            }
-                        }
-                    }
-                });
-
-        if (savedJob == null) {
-            throw new ApiUsageException(null, null, "Could not submit job. ");
-        }
-
-        // Unloading job to prevent lazy-initialization exceptions.
-        Job unloadedJob = (Job) mapper.map(savedJob);
-        unloadedJob.unload();
-
-        // Lookup processor
-        // Create wrapper (InteractiveProcessor)
-        // Create session (with session)
-        // Setup environment
-        // Send off to processor
-        long start = System.currentTimeMillis();
-        long stop = seconds < 0 ? start : (start + (seconds * 1000L));
-        do {
-
-            Ice.ObjectPrx objectPrx = adapter.getCommunicator().stringToProxy(
-                    "IceGrid/Query");
-            IceGrid.QueryPrx query = IceGrid.QueryPrxHelper
-                    .checkedCast(objectPrx);
-            Ice.ObjectPrx[] candidates = query
-                    .findAllObjectsByType("::omero::grid::Processor");
-
-            // //current.con
-
-            for (Ice.ObjectPrx op : candidates) {
-                ProcessorPrx p;
-                try {
-                    p = ProcessorPrxHelper.checkedCast(op);
-                    if (p != null) {
-                        // p.login()
-                    }
-                } catch (Exception e) {
-                    // continue
-                }
-            }
-
-            Ice.ObjectPrx prx = adapter.getCommunicator().stringToProxy(
-                    "Processor");
-            if (prx != null) {
-                ProcessorPrx processor;
-                try {
-                    processor = ProcessorPrxHelper.checkedCast(prx);
-                    if (processor != null) {
-                        long timeout = System.currentTimeMillis() + 60 * 60 * 1000L;
-                        InteractiveProcessorI ip = new InteractiveProcessorI(
-                                this.principal, this.sessionManager,
-                                this.executor, processor, unloadedJob, timeout);
-                        Ice.Identity id = new Ice.Identity();
-                        id.category = current.id.name;
-                        id.name = Ice.Util.generateUUID();
-                        Ice.ObjectPrx rv = registerServant(current, id, ip);
-                        return InteractiveProcessorPrxHelper.uncheckedCast(rv);
-                    }
-                    try {
-                        Thread.sleep((stop - start) / 10);
-                    } catch (InterruptedException ie) {
-                        // ok.
-                    }
-                } catch (Ice.NoEndpointException nee) {
-                    // This means that there probably is none.
-                    // Wait a little longer
-                    try {
-                        Thread.sleep((stop - start) / 3);
-                    } catch (InterruptedException ie) {
-                        // ok.
-                    }
-                }
-            }
-        } while (stop < System.currentTimeMillis());
-        return null;
-    }
-
     public void setCallback(ClientCallbackPrx callback, Ice.Current current) {
         this.callback = callback;
         log.info(Ice.Util.identityToString(this.sessionId())
@@ -561,7 +471,7 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
      * reconnecting to it. This means that the Glacier timeout property is
      * fairly unimportant. If a Glacier connection times out or is otherwise
      * destroyed, a client can attempt to reconnect.
-     *
+     * 
      * However, in the case of only one reference to the session, if the
      * Glacier2 timeout is greater than the session timeout, exceptions can be
      * thrown when this method tries to clean up the session. Therefore all
@@ -581,7 +491,8 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
             // this session first. Logging the fact, but we will
             // continue with the closing which should be safe
             // to call multiple times.
-            log.warn("NotRegisteredException: " + Ice.Util.identityToString(sessionId()));
+            log.warn("NotRegisteredException: "
+                    + Ice.Util.identityToString(sessionId()));
         } catch (Ice.ObjectAdapterDeactivatedException oade) {
             log.warn("Adapter already deactivated. Cannot remove: "
                     + sessionId());
@@ -625,7 +536,7 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
                 } catch (ConnectionLostException cle) {
                     log.debug(clientId + "'s connection lost as expected");
                 } catch (ConnectTimeoutException cte) {
-                    log.warn("ConnectTimeoutException on callback:"+clientId);
+                    log.warn("ConnectTimeoutException on callback:" + clientId);
                 } catch (Exception e) {
                     log.error("Unknown error on oneway "
                             + "ClientCallback.sessionClosed to "
@@ -656,7 +567,7 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
      * {@link Session}. Since {@link #destroy()} is called regardless by the
      * router, even when a client has just died, we have this internal method
      * for handling the actual closing of resources.
-     *
+     * 
      * This method must take precautions to not throw a {@link SessionException}
      * . See {@link #destroy(Current)} for more information.
      */
@@ -692,64 +603,31 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
                     }
 
                     // Now that we have the servant instance, we do what we can
-                    // to clean it up. Stateful services must use the callback
-                    // mechanism of IceMethodInvoker. InteractiveProcessors must
+                    // to clean it up. Our AmdServants must use a message
+                    // to have the servant removed. InteractiveProcessors must
                     // be stopped and unregistered. Stateless must only be
                     // unregistered.
                     //
-                    // TODO: put all of this in the AbstractAmdServant class.
-                    if (servant instanceof _StatefulServiceInterfaceOperations) {
-
-                        // Cleanup stateful
-                        // ----------------
-                        // Here we call the "close()" method on all methods
-                        // which
-                        // require that logic, allowing the IceMethodInvoker to
-                        // raise the UnregisterServantEvent, otherwise there is
-                        // a
-                        // recursive call back to close
-                        final _StatefulServiceInterfaceOperations stateful = (_StatefulServiceInterfaceOperations) servant;
+                    if (servant instanceof AbstractAmdServant) {
                         final Ice.Current __curr = new Ice.Current();
                         __curr.id = id;
                         __curr.adapter = adapter;
                         __curr.operation = "close";
                         __curr.ctx = new HashMap<String, String>();
                         __curr.ctx.put(CLIENTUUID.value, clientId);
-                        // We have to be more intelligent about this. The call
-                        // should really happen in the same thread so that it's
-                        // complete before the service factory is removed.
-                        stateful.close_async(
-                                new AMD_StatefulServiceInterface_close() {
-                                    public void ice_exception(Exception ex) {
-                                        if (ex instanceof omero.SessionException) {
-                                            log.warn("Stateful session not properly closed: "
-                                                    +key);
-                                        } else {
-                                            log.error("Error on close callback: "
-                                                + key + "=" + stateful, ex);
-                                        }
-                                    }
-
-                                    public void ice_response() {
-                                        // Ok.
-                                    }
-
-                                }, __curr);
-
+                        AbstractAmdServant amd = (AbstractAmdServant) servant;
+                        amd.close(__curr);
+                    } else if (servant instanceof InteractiveProcessorI) {
+                        // Cleanup interactive processors
+                        // ------------------------------
+                        InteractiveProcessorI ip = (InteractiveProcessorI) servant;
+                        ip.stop();
+                    } else if (servant instanceof SharedResourcesI) {
+                        // Not currently doing anything.
+                        // But will eventually need to cleanup cache.
+                        ((SharedResourcesI)servant).close();
                     } else {
-                        if (servant instanceof InteractiveProcessorI) {
-                            // Cleanup interactive processors
-                            // ------------------------------
-                            InteractiveProcessorI ip = (InteractiveProcessorI) servant;
-                            ip.stop();
-                        } else if (servant instanceof _ServiceInterfaceOperations) {
-                            // Cleanup stateless
-                            // -----------------
-                            // Do nothing.
-                        } else {
-                            throw new ome.conditions.InternalException(
-                                    "Unknown servant type: " + servant);
-                        }
+                        log.error("Unknown servant type: " + servant);
                     }
                 } catch (Exception e) {
                     log.error("Error destroying servant: " + key + "="
@@ -776,9 +654,9 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
         // First take measures to keep the session alive
         sessionManager.getEventContext(this.principal);
         if (log.isInfoEnabled()) {
-            log.info("Keep alive: "+__current.id.name);
+            log.info("Keep alive: " + __current.id.name);
         }
-        
+
         if (proxies == null || proxies.length == 0) {
             return -1; // All set to 1
         }
@@ -802,9 +680,9 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
         // First take measures to keep the session alive
         sessionManager.getEventContext(this.principal);
         if (log.isInfoEnabled()) {
-            log.info("Keep alive: "+__current.id.name);
+            log.info("Keep alive: " + __current.id.name);
         }
-        
+
         if (proxy == null) {
             return false;
         }
@@ -902,6 +780,12 @@ public final class ServiceFactoryI extends _ServiceFactoryDisp {
         } catch (Exception e) {
             if (e instanceof omero.InternalException) {
                 throw (omero.InternalException) e;
+            } else if (e instanceof Ice.ObjectAdapterDeactivatedException) {
+                // ticket:1251
+                ShutdownInProgress sip = new ShutdownInProgress(null, null,
+                        "ObjectAdapter deactivated");
+                IceMapper.fillServerError(sip, e);
+                throw sip;
             } else {
                 omero.InternalException ie = new omero.InternalException();
                 IceMapper.fillServerError(ie, e);

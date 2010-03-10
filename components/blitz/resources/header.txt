@@ -1,0 +1,19 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+    <head>
+        <title>
+            OMERO API Index - 
+TITLE
+        </title>
+        <style media="screen" type="text/css">
+@import "http://hudson.openmicroscopy.org.uk/userContent/styleForAPI.css";
+        </style>
+    </head>
+    <body>
+       <div id="wrapper">
+          <div id="banner">
+             <a href="http://hudson.openmicroscopy.org.uk/job/OMERO/javadoc/"><img src="http://hudson.openmicroscopy.org.uk/userContent/ome_docs_trac_banner.png" alt="OME-XML"></a>
+          </div>
+          <div id="version-top"><p>Version: @VERSION@</p></div>
+          <div id="doc-name-right" style="position: absolute;top: 117px;right: 25px;font-size: 24px;font-weight: bold;"><b>OmeroBlitz Api</b></div>
+       </div>
