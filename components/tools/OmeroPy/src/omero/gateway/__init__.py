@@ -1578,16 +1578,16 @@ class BlitzObjectWrapper (object):
     def _linkAnnotation (self, ann):
         if not ann.getId():
             # Not yet in db, save it
-            #ann.details.setPermissions(omero.model.PermissionsI())
-            #ann.details.permissions.setWorldRead(True)
+            ann.details.setPermissions(omero.model.PermissionsI())
+            ann.details.permissions.setWorldRead(True)
             ann = ann.__class__(self._conn, self._conn.getUpdateService().saveAndReturnObject(ann._obj))
         #else:
         #    ann.save()
         lnktype = "%sAnnotationLinkI" % self.OMERO_CLASS
         lnk = getattr(omero.model, lnktype)()
-        #lnk.details.setPermissions(omero.model.PermissionsI())
-        #lnk.details.permissions.setWorldRead(True)
-        #lnk.details.permissions.setUserWrite(True)
+        lnk.details.setPermissions(omero.model.PermissionsI())
+        lnk.details.permissions.setWorldRead(True)
+        lnk.details.permissions.setUserWrite(True)
         lnk.setParent(self._obj.__class__(self._obj.id, False))
         lnk.setChild(ann._obj.__class__(ann._obj.id, False))
         self._conn.getUpdateService().saveObject(lnk)
@@ -2433,7 +2433,6 @@ class _ImageWrapper (BlitzObjectWrapper):
             args = map(lambda x: rint(x), size)
             if pos is not None:
                 args = list(pos) + args
-            print args
             rv = thumb(*args)
             return rv
         except Exception: #pragma: no cover

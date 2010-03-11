@@ -57,6 +57,10 @@ class WGTest (GTest):
         q.update({'username': user.name, 'password': user.passwd})
         r.REQUEST.dicts += (q,)
         self.gateway = views.getBlitzConnection(r, 1, group=user.groupname, try_super=user.admin)
+        if self.gateway is None:
+            # If the login framework was customized (using this app outside omeroweb) the above fails
+            super(WGTest, self).doLogin(user)
+            self.gateway.user = views.UserProxy(self.gateway)
 
 class HelperObjectsTest (unittest.TestCase):
     def testColorHolder (self):

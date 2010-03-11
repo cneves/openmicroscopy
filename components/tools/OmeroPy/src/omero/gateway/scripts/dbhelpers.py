@@ -304,7 +304,8 @@ class ImageEntry (ObjectEntry):
         if i is not None:
             #print ".. -> image already exists: %s" % self.name
             return i
-        print ".. -> create new image: %s" % self.name
+        #print ".. -> create new image: %s" % self.name
+        sys.stderr.write('I')
         if self.filename is False:
             UserEntry.setGroupForSession(client, dataset.getDetails().getGroup().getName())
             self._createWithoutPixels(client, dataset)
@@ -315,7 +316,8 @@ class ImageEntry (ObjectEntry):
                 os.makedirs(os.path.dirname(fpath))
             # First try to download the image
             try:
-                print "Trying to get test image from " + TESTIMG_URL + self.filename
+                #print "Trying to get test image from " + TESTIMG_URL + self.filename
+                sys.stderr.write('<')
                 f = urllib2.urlopen(TESTIMG_URL + self.filename)
                 open(fpath, 'wb').write(f.read())
             except urllib2.HTTPError:
@@ -393,9 +395,10 @@ def bootstrap ():
         i.create()
 
 def cleanup ():
-    #client = loginAsRoot()
+    client = loginAsRoot()
     for k, p in PROJECTS.items():
-        p = p.get()
+        sys.stderr.write('*')
+        p = p.get(client)
         if p is not None:
             client = p._conn
             update = client.getUpdateService()
@@ -403,6 +406,9 @@ def cleanup ():
             for d in p.listChildren():
                 delete.deleteImagesByDataset(d.getId(), True)
                 update.deleteObject(d._obj)
+            nss = list(set([x.ns for x in p.listAnnotations()]))
+            for ns in nss:
+                p.removeAnnotations(ns)
             #print ".. -> removing project %s" % p.getName()
             update.deleteObject(p._obj)
     # What about users?
