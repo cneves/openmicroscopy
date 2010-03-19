@@ -1,5 +1,5 @@
 /*
- *   $Id: PojosLoadHierarchyQueryDefinition.java 5952 2009-12-14 09:36:05Z jburel $
+ *   $Id: PojosLoadHierarchyQueryDefinition.java 6316 2010-03-18 02:14:58Z cneves-x $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -107,9 +107,12 @@ public class PojosLoadHierarchyQueryDefinition extends Query {
     protected void enableFilters(Session session) {
         ownerOrGroupFilters(session,
         // TODO this needs to be moved to Hierarchy.
-                new String[] { Project.OWNER_FILTER,
-                        Dataset.OWNER_FILTER }, new String[] {
-                        Project.GROUP_FILTER, Dataset.GROUP_FILTER });
+                new String[] { 
+        				Project.OWNER_FILTER, Dataset.OWNER_FILTER, 
+        				Screen.OWNER_FILTER, Plate.OWNER_FILTER }, 
+                new String[] { 
+        				Project.GROUP_FILTER, Dataset.GROUP_FILTER, 
+        		        Screen.GROUP_FILTER, Plate.GROUP_FILTER });
     }
 
 }

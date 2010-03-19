@@ -3,6 +3,7 @@ sys.path.append('.')
 
 import omero.gateway
 import omero.model
+import omero_version
 from omero.rtypes import *
 import os
 import subprocess
@@ -11,8 +12,10 @@ import time
 import urllib2
 from types import StringTypes
 
+omero_version = omero_version.omero_version.split('-')[1].split('.')
+
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
-TESTIMG_URL = 'http://necromancer.openmicroscopy.org.uk/~carlos/'
+TESTIMG_URL = 'http://users.openmicroscopy.org.uk/~cneves-x/'
 
 #Gateway = omero.gateway.BlitzGateway
 
@@ -343,7 +346,7 @@ class ImageEntry (ObjectEntry):
         #print exe
         pid = p.communicate()#[0].strip() #re.search('Saving pixels id: (\d*)', p.communicate()[0]).group(1)
         #print pid
-        img = omero.gateway.ImageWrapper(dataset._conn, dataset._conn.getQueryService().find('Pixels', long(pid[0].strip())).image)
+        img = omero.gateway.ImageWrapper(dataset._conn, dataset._conn.getQueryService().find('Pixels', long(pid[0].split('\n')[0].strip())).image)
         #print "imgid = %i" % img.getId()
         img.setName(self.name)
         #img._obj.objectiveSettings = None
@@ -394,11 +397,16 @@ def bootstrap ():
     for k, i in IMAGES.items():
         i.create()
 
+NEWSTYLEPERMS = omero_version >= ['4','2','0']
 def cleanup ():
-    client = loginAsRoot()
+    if not NEWSTYLEPERMS:
+        client = loginAsRoot()
     for k, p in PROJECTS.items():
         sys.stderr.write('*')
-        p = p.get(client)
+        if NEWSTYLEPERMS:
+            p = p.get()
+        else:
+            p = p.get(client)
         if p is not None:
             client = p._conn
             update = client.getUpdateService()
