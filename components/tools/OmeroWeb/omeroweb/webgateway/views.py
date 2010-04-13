@@ -70,6 +70,9 @@ class UserProxy (object):
     def isAdmin (self):
         return self._blitzcon.isAdmin()
 
+    def canBeAdmin (self):
+        return self._blitzcon.canBeAdmin()
+
     def getId (self):
         return self._blitzcon._user.id
 
@@ -99,9 +102,9 @@ class UserProxy (object):
 #        self._log('close',c)
 #_session_cb = SessionCB()
 
-def _createConnection (server_id, sUuid=None, username=None, passwd=None, host=None, port=None, retry=True, group=None, try_super=False):
+def _createConnection (server_id, sUuid=None, username=None, passwd=None, host=None, port=None, retry=True, group=None, try_super=False, secure=False):
     try:
-        blitzcon = client_wrapper(username, passwd, host=host, port=port, group=None, try_super=try_super)
+        blitzcon = client_wrapper(username, passwd, host=host, port=port, group=None, try_super=try_super, secure=secure)
         blitzcon.connect(sUuid=sUuid)
         blitzcon.server_id = server_id
         blitzcon.user = UserProxy(blitzcon)
@@ -165,7 +168,8 @@ def getBlitzConnection (request, server_id=None, with_session=False, retry=True,
     passwd = request.session.get('password', r.get('password', None))
     host = request.session.get('host', r.get('host', None))
     port = request.session.get('port', r.get('port', None))
-    logger.debug(':: %s %s ::' % (str(username), str(passwd)))
+    secure = request.session.get('ssl', r.get('ssl', False))
+    logger.debug(':: %s %s :: %s' % (str(username), str(passwd), str(browsersession_connection_key)))
 
 #    if r.has_key('logout'):
 #        logger.debug('logout required by HTTP GET or POST')
@@ -217,7 +221,7 @@ def getBlitzConnection (request, server_id=None, with_session=False, retry=True,
             sUuid = request.session.get(browsersession_connection_key, None)
         blitzcon = _createConnection(server_id, sUuid=sUuid,
                                      username=username, passwd=passwd,
-                                     host=host, port=port, group=group, try_super=try_super)
+                                     host=host, port=port, group=group, try_super=try_super, secure=secure)
         if blitzcon is None:
             if not retry or username:
                 logger.debug('connection failed with provided login information, bail out')
@@ -897,3 +901,24 @@ def test (request):
     t = template_loader.get_template('webgateway/omero_image.html')
     c = Context(request,context)
     return HttpResponse(t.render(c))
+
+@jsonp
+def su (request, user, server_id=None, _conn=None, **kwargs):
+    if not _conn.canBeAdmin():
+        return False
+    _conn.setGroupNameForSession('system')
+    if server_id is None:
+        # If no server id is passed, the db entry will not be used and instead we'll depend on the
+        # request.session and request.REQUEST values
+        try:
+            server_id = request.session['server']
+        except KeyError:
+            return None
+    browsersession_connection_key = 'cuuid#%s'%server_id
+    c = _conn.suConn(user,
+                     ttl=_conn.getSessionService().getSession(_conn._sessionUuid).getTimeToIdle().val)
+    _conn.revertGroupForSession()
+    _conn.seppuku()
+    logger.debug(browsersession_connection_key)
+    request.session[browsersession_connection_key] = c._sessionUuid
+    return True

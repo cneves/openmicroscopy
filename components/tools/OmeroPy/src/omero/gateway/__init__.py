@@ -187,13 +187,14 @@ class BlitzObjectWrapper (object):
                     d.getGroup().name == details.getGroup().name:
                 return self.save()
             else:
-                p = omero.sys.Principal()
-                p.name = details.getOwner().omeName
-                p.group = details.getGroup().name
-                p.eventType = "User"
-                newConnId = self._conn.getSessionService().createSessionWithTimeout(p, 60000)
-                newConn = self._conn.clone()
-                newConn.connect(sUuid=newConnId.getUuid().val)
+                newConn = self._conn.suConn(details.getOwner().omeName, details.getGroup().name)
+                #p = omero.sys.Principal()
+                #p.name = details.getOwner().omeName
+                #p.group = details.getGroup().name
+                #p.eventType = "User"
+                #newConnId = self._conn.getSessionService().createSessionWithTimeout(p, 60000)
+                #newConn = self._conn.clone()
+                #newConn.connect(sUuid=newConnId.getUuid().val)
             clone = self.__class__(newConn, self._obj)
             clone.save()
             self._obj = clone._obj
@@ -412,14 +413,16 @@ class BlitzObjectWrapper (object):
                 if ad.getOwner() and d.getOwner().omeName == ad.getOwner().omeName and d.getGroup().name == ad.getGroup().name:
                     newConn = ann._conn
                 else:
-                    p = omero.sys.Principal()
-                    p.name = d.getOwner().omeName
+                    #p = omero.sys.Principal()
+                    #p.name = d.getOwner().omeName
+                    group = None
                     if d.getGroup():
-                        p.group = d.getGroup().name
-                    p.eventType = "User"
-                    newConnId = self._conn.getSessionService().createSessionWithTimeout(p, 60000)
-                    newConn = self._conn.clone()
-                    newConn.connect(sUuid=newConnId.getUuid().val)
+                        group = d.getGroup().name
+                    newConn = self._conn.suConn(d.getOwner().omeName, group)
+                    #p.eventType = "User"
+                    #newConnId = self._conn.getSessionService().createSessionWithTimeout(p, 60000)
+                    #newConn = self._conn.clone()
+                    #newConn.connect(sUuid=newConnId.getUuid().val)
                 clone = self.__class__(newConn, self._obj)
                 ann = clone._linkAnnotation(ann)
             elif d.getGroup():
@@ -448,12 +451,16 @@ class BlitzObjectWrapper (object):
             # 'key|wrapper' -> key = omero.gateway.wrapper(_obj[key]).simpleMarshal
             for k in self._attrs:
                 if ';' in k:
-                    k, s, rk = k.partition(';')
+                    s = k.split(';')
+                    k = s[0]
+                    rk = ';'.join(s[1:])
                 else:
                     rk = k
                 rk = rk.replace('#', '')
                 if '|' in k:
-                    k2, s, w = rk.partition('|')
+                    s = k.split('|')
+                    k2 = s[0]
+                    w = '|'.join(s[1:])
                     if rk == k:
                         rk = k2
                     k = k2
@@ -486,6 +493,21 @@ class BlitzObjectWrapper (object):
     #    return str(self._obj)
 
     def __getattr__ (self, attr):
+        if attr != 'get' and attr.startswith('get') and hasattr(self, '_attrs'):
+            tattr = attr[3].lower() + attr[4:]
+            attrs = filter(lambda x: tattr in x, self._attrs)
+            for a in attrs:
+                if a.startswith('#') and a[1:] == tattr:
+                    v = getattr(self, tattr)
+                    if v is not None:
+                        v = v._value
+                    def wrap ():
+                        return v
+                    return wrap
+                if len(a) > len(tattr) and a[len(tattr)] == '|':
+                    def wrap ():
+                        return getattr(omero.gateway, a[len(tattr)+1:])(self._conn, getattr(self, tattr))
+                    return wrap
         if not hasattr(self._obj, attr) and hasattr(self._obj, '_'+attr):
             attr = '_' + attr
         if hasattr(self._obj, attr):
@@ -515,8 +537,13 @@ class BlitzObjectWrapper (object):
         
         @return: String or None
         """
-        
-        return hasattr(self._obj, 'name') and self._obj.getName().val or None
+        if hasattr(self._obj, 'name'):
+            if hasattr(self._obj.name, 'val'):
+                return self._obj.getName().val
+            else:
+                return self._obj.getName()
+        else:
+            return None
 
     def getDescription (self):
         """
@@ -621,7 +648,7 @@ class _BlitzGateway (object):
     ICE_CONFIG = None#os.path.join(p,'etc/ice.config')
 #    def __init__ (self, username, passwd, server, port, client_obj=None, group=None, clone=False):
     
-    def __init__ (self, username=None, passwd=None, client_obj=None, group=None, clone=False, try_super=False, host=None, port=None, extra_config=[]):
+    def __init__ (self, username=None, passwd=None, client_obj=None, group=None, clone=False, try_super=False, host=None, port=None, extra_config=[], secure=False):
         """
         TODO: Constructor
         
@@ -634,6 +661,7 @@ class _BlitzGateway (object):
         @param host:        Omero server host. String
         @param port:        Omero server port. Integer
         @param extra_config:
+        @param secure:      Initial underlying omero.client connection type (True=SSL/False=insecure)
         """
         
         super(_BlitzGateway, self).__init__()
@@ -647,6 +675,7 @@ class _BlitzGateway (object):
 
         self.host = host
         self.port = port
+        self.secure = secure
 
         self._resetOmeroClient()
         if not username:
@@ -680,7 +709,8 @@ class _BlitzGateway (object):
                               host = self.host,
                               port = self.port,
                               extra_config=self.extra_config,
-                              clone=True)
+                              clone=True,
+                              secure=self.secure)
                               #self.server, self.port, clone=True)
 
     def setIdentity (self, username, passwd, _internal=False):
@@ -696,6 +726,23 @@ class _BlitzGateway (object):
                           omero.constants.PASSWORD: passwd}
         self._anonymous = _internal
     
+    def suConn (self, username, group=None, ttl=60000):
+        """ If current user isAdmin, return new connection owned by 'username' """
+        if self.isAdmin():
+            if group is None:
+                e = self.lookupExperimenter(username)
+                if e is None:
+                    return
+                group = e._obj._groupExperimenterMapSeq[0].parent.name.val
+            p = omero.sys.Principal()
+            p.name = username
+            p.group = group
+            p.eventType = "User"
+            newConnId = self.getSessionService().createSessionWithTimeout(p, ttl)
+            newConn = self.clone()
+            newConn.connect(sUuid=newConnId.getUuid().val)
+            return newConn
+
     def keepAlive (self):
         """
         Keeps service alive. 
@@ -820,12 +867,23 @@ class _BlitzGateway (object):
                 self._session_cb.join(self)
             else:
                 self._session_cb.create(self)
+
+    def setSecure (self, secure=True):
+        """ Switches between SSL and insecure (faster) connections to Blitz.
+        The gateway must already be connected. """
+        if hasattr(self.c, 'createClient') and (secure ^ self.c.isSecure()):
+            self.c = self.c.createClient(secure=secure)
+            self._createProxies()
+            self.secure = secure
     
+    def isSecure (self):
+        """ Returns 'True' if the underlying omero.clients.BaseClient is connected using SSL """
+        return hasattr(self.c, 'isSecure') and self.c.isSecure() or False
+
     def _createSession (self, skipSUuid=False):
         """
         Creates a new session for the principal given in the constructor.
         """
-        
         s = self.c.createSession(self._ic_props[omero.constants.USERNAME],
                                  self._ic_props[omero.constants.PASSWORD])
         self._sessionUuid = self.c.sf.ice_getIdentity().name
@@ -837,6 +895,7 @@ class _BlitzGateway (object):
         if self.group is not None:
             # try something that fails if the user don't have permissions on the group
             self.c.sf.getAdminService().getEventContext()
+        self.setSecure(self.secure)
     
     def _closeSession (self):
         """
@@ -933,7 +992,6 @@ class _BlitzGateway (object):
                     self.c.ic.getImplicitContext().put(omero.constants.EVENT, 'Internal')
                 if self.group is not None:
                     self.c.ic.getImplicitContext().put(omero.constants.GROUP, self.group)
-                    self.c.ic.getImplicitContext().put(omero.constants.UMASK, 'rwrw--')
                 try:
                     logger.info("(1) calling createSession()")
                     self._createSession()
@@ -1044,6 +1102,14 @@ class _BlitzGateway (object):
         
         return self.getEventContext().isAdmin
     
+    def canBeAdmin (self):
+        """
+        Checks if a user is in system group, i.e. can have administration privileges.
+        
+        @return:    Boolean
+        """
+        return 0 in self.getEventContext().memberOfGroups
+
     def isOwner (self, gid=None):
         """
         Checks if a user has owner privileges.
@@ -2301,7 +2367,7 @@ class _ChannelWrapper (BlitzObjectWrapper):
         lc = self.getLogicalChannel()
         rv = lc.name
         if rv is None:
-            rv = emissionWave
+            rv = lc.emissionWave
         if rv is None:
             rv = self._idx
         return rv
@@ -2390,7 +2456,9 @@ class _ImageWrapper (BlitzObjectWrapper):
 
     def getInstrument (self):
         i = self._obj.instrument
-        if i is not None and not i.loaded:
+        if i is None:
+            return None
+        if not i.loaded:
             self._obj.instrument = self._conn.getQueryService().find('Instrument', i.id.val)
             i = self._obj.instrument
             meta_serv = self._conn.getMetadataService()
@@ -2413,7 +2481,7 @@ class _ImageWrapper (BlitzObjectWrapper):
                     pass
                 else:
                     print "Unknown instrument entry: %s" % str(e)
-        return InstrumentWrapper(self._conn, self._obj.instrument)
+        return InstrumentWrapper(self._conn, i)
 
     def _loadPixels (self):
         if not self._obj.pixelsLoaded:
@@ -3223,7 +3291,7 @@ class _LightSettingsWrapper (BlitzObjectWrapper):
     """
     _attrs = ('attenuation',
               'wavelength',
-              'lightSource|LightSourceWrapper'
+              'lightSource|LightSourceWrapper',
               'microbeamManipulation',
               'version')
 
@@ -3358,14 +3426,17 @@ class _InstrumentWrapper (BlitzObjectWrapper):
 
 
     def simpleMarshal (self):
-        rv = super(_InstrumentWrapper, self).simpleMarshal(parents=False)
-        rv['detectors'] = [x.simpleMarshal() for x in self.getDetectors()]
-        rv['objectives'] = [x.simpleMarshal() for x in self.getObjectives()]
-        rv['filters'] = [x.simpleMarshal() for x in self.getFilters()]
-        rv['dichroics'] = [x.simpleMarshal() for x in self.getDichroics()]
-        rv['filterSets'] = [x.simpleMarshal() for x in self.getFilterSets()]
-        rv['otfs'] = [x.simpleMarshal() for x in self.getOTFs()]
-        rv['lightsources'] = [x.simpleMarshal() for x in self.getLightSources()]
+        if self._obj:
+            rv = super(_InstrumentWrapper, self).simpleMarshal(parents=False)
+            rv['detectors'] = [x.simpleMarshal() for x in self.getDetectors()]
+            rv['objectives'] = [x.simpleMarshal() for x in self.getObjectives()]
+            rv['filters'] = [x.simpleMarshal() for x in self.getFilters()]
+            rv['dichroics'] = [x.simpleMarshal() for x in self.getDichroics()]
+            rv['filterSets'] = [x.simpleMarshal() for x in self.getFilterSets()]
+            rv['otfs'] = [x.simpleMarshal() for x in self.getOTFs()]
+            rv['lightsources'] = [x.simpleMarshal() for x in self.getLightSources()]
+        else:
+            rv = {}
         return rv
 
 InstrumentWrapper = _InstrumentWrapper
