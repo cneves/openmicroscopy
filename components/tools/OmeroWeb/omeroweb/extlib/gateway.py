@@ -75,13 +75,13 @@ class OmeroWebGateway (omero.gateway.BlitzGateway):
         super(OmeroWebGateway, self).__init__(*args, **kwargs)
         self._shareId = None
 
-    def connect (self, *args, **kwargs):
-        rv = super(OmeroWebGateway, self).connect(*args,**kwargs)
-        try:
-            self.removeGroupFromContext()
-        except omero.SecurityViolation:
-            pass
-        return rv
+#    def connect (self, *args, **kwargs):
+#        rv = super(OmeroWebGateway, self).connect(*args,**kwargs)
+#        try:
+#            self.removeGroupFromContext()
+#        except omero.SecurityViolation:
+#            pass
+#        return rv
 
     def attachToShare (self, share_id):
         sh = self._proxies['share'].getShare(long(share_id))
@@ -2411,15 +2411,15 @@ class ImageStageLabelWrapper (omero.gateway.BlitzObjectWrapper):
 
 class ImageWrapper (OmeroWebObjectWrapper, omero.gateway.ImageWrapper):
     
-    def getThumbnail (self, size=(120,120)):
-        rv = super(omero.gateway.ImageWrapper, self).getThumbnail(size=size)
-        if rv is None:
-            try:
-                rv = self.defaultThumbnail(size)
-            except Exception, e:
-                logger.info(traceback.format_exc())
-                raise e
-        return rv
+#    def getThumbnail (self, size=(120,120)):
+#        rv = super(omero.gateway.ImageWrapper, self).getThumbnail(size=size)
+#        if rv is None:
+#            try:
+#                rv = self.defaultThumbnail(size)
+#            except Exception, e:
+#                logger.info(traceback.format_exc())
+#                raise e
+#        return rv
     
     def defaultThumbnail(self, size=(120,120)):
         img = Image.open(settings.DEFAULT_IMG)

@@ -56,7 +56,9 @@ def _session_logout (request, server_id, force_key=None):
             del request.session[k]
     if connectors.has_key(session_key):
         logger.debug('logout: killing connection "%s"' % (session_key))
-        connectors[session_key] and connectors[session_key].seppuku()
+        if connectors[session_key]:
+            logger.info('logout request for "%s"' % connectors[session_key].getUser().omeName)
+            connectors[session_key] and connectors[session_key].seppuku()
         del connectors[session_key]
 
 class UserProxy (object):
@@ -228,6 +230,7 @@ def getBlitzConnection (request, server_id=None, with_session=False, retry=True,
             return getBlitzConnection(request, server_id, with_session, retry=False, group=group, try_super=try_super)
         else:
             logger.debug('created new connection %s' % str(blitzcon))
+            
             if not blitzcon.isConnected():
                 ####
                 # Have a blitzcon, but it doesn't connect.
@@ -365,7 +368,7 @@ def render_thumbnail (request, iid, server_id=None, w=None, h=None, **kwargs):
         jpeg_data = img.getThumbnail(size=size)
         if jpeg_data is None:
             logger.debug("(c)Image %s not found..." % (str(iid)))
-            raise Http404
+            return HttpResponseServerError('Failed to render thumbnail')
         webgateway_cache.setThumb(request, server_id, iid, jpeg_data, size)
     else:
         pass
@@ -459,16 +462,18 @@ def debug (f):
     return wrap
 
 def jsonp (f):
-    def wrap (request, server_id=None, *args, **kwargs):
+    def wrap (request, *args, **kwargs):
         logger.debug('jsonp')
         try:
+            server_id = kwargs.get('server_id', None)
+            kwargs['server_id'] = server_id
             _conn = kwargs.get('_conn', None)
             if _conn is None:
                 blitzcon = getBlitzConnection(request, server_id)
                 kwargs['_conn'] = blitzcon
             if kwargs['_conn'] is None or not kwargs['_conn'].isConnected():
                 return HttpResponseServerError('"failed connection"', mimetype='application/javascript')
-            rv = f(request, server_id=server_id, **kwargs)
+            rv = f(request, *args, **kwargs)
             if _conn is not None and kwargs.get('_internal', False):
                 return rv
             rv = simplejson.dumps(rv)
@@ -558,16 +563,16 @@ def imageMarshal (image, key=None):
             'pixel_size': {'x': image.getPixelSizeX(),
                            'y': image.getPixelSizeY(),
                            'z': image.getPixelSizeZ(),},
-            'meta': {'name': image.name or '',
-                     'description': image.description or '',
-                     'author': image.getAuthor(),
-                     'project': pr and pr.name or 'Multiple',
+            'meta': {'imageName': image.name or '',
+                     'imageDescription': image.description or '',
+                     'imageAuthor': image.getAuthor(),
+                     'projectName': pr and pr.name or 'Multiple',
                      'projectId': pr and pr.id or None,
                      'projectDescription':pr and pr.description or '',
-                     'dataset': ds and ds.name or 'Multiple',
+                     'datasetName': ds and ds.name or 'Multiple',
                      'datasetId': ds and ds.id or '',
                      'datasetDescription': ds and ds.description or '',
-                     'timestamp': time.mktime(image.getDate().timetuple()),
+                     'imageTimestamp': time.mktime(image.getDate().timetuple()),
                      'imageId': image.id,},
             }
         try:
@@ -615,8 +620,9 @@ def listImages_json (request, did, server_id=None, _conn=None, **kwargs):
     dataset = blitzcon.getDataset(did)
     if dataset is None:
         return HttpResponseServerError('""', mimetype='application/javascript')
+    prefix = kwargs.get('thumbprefix', 'webgateway.views.render_thumbnail')
     def urlprefix(iid):
-        return reverse('webgateway.views.render_thumbnail', args=(iid,))
+        return reverse(prefix, args=(iid,))
     xtra = {'thumbUrlPrefix': urlprefix}
     return map(lambda x: x.simpleMarshal(xtra=xtra), dataset.listChildren())
 
@@ -827,7 +833,7 @@ def copy_image_rdef_json (request, server_id, _conn=None, **kwargs):
             newConnId = blitzcon.getSessionService().createSessionWithTimeout(p, 1200000)
             newConn = blitzcon.clone()
             newConn.connect(sUuid=newConnId.getUuid().val)
-        elif fromimg.canWrite():
+        elif fromimg.isEditable():
             newConn = blitzcon
             newConn.setGroupForSession(details.getGroup().getId())
 
