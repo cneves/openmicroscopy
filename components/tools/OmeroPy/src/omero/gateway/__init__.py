@@ -20,6 +20,7 @@ import ConfigParser
 
 import omero
 import omero.clients
+from omero.util.decorators import timeit, TimeIt
 import Ice
 import Glacier2
 
@@ -32,7 +33,7 @@ logger = logging.getLogger('blitz_gateway')
 
 try:
     import Image, ImageDraw, ImageFont
-except:
+except: #pragma: nocover
     logger.error('No PIL installed, line plots and split channel will fail!')
 from cStringIO import StringIO
 from math import sqrt
@@ -64,42 +65,6 @@ def omero_type(val):
         return rlong(val)
     else:
         return val
-
-class TimeIt (object):
-    """
-    Decorator to measure the execution time of a function.
-
-    @param level: the level to use for logging
-    """
-    def __init__ (self, level=logging.DEBUG):
-        self._level = level
-
-    def __call__ (self, func):
-        def wrapped (*args, **kwargs):
-            logger.log(self._level, "timing %s" % (func.func_name))
-            now = time.time()
-            rv = func(*args, **kwargs)
-            logger.log(self._level, "timed %s: %f" % (func.func_name, time.time()-now))
-            return rv
-        return wrapped
-
-def timeit (func):
-    """
-    Measures the execution time of a function using time.time() 
-    and the a @ function decorator.
-
-    Logs at logging.DEBUG level.
-    """
-    def wrapped (*args, **kwargs):
-        logger.log(self._level, "timing %s" % (func.func_name))
-        now = time.time()
-        rv = func(*args, **kwargs)
-        logger.log(self._level, "timed %s: %f" % (func.func_name, time.time()-now))
-        return rv
-    return TimeIt()(func)
-
-
-
 
 class BlitzObjectWrapper (object):
     """
@@ -164,12 +129,12 @@ class BlitzObjectWrapper (object):
         self._obj = self._conn.getContainerService().loadContainerHierarchy(self.OMERO_CLASS, (self._oid,), None)[0]
 
 
-    def _getParentLink (self):
-        p = self.listParents()
-        link = self._conn.getQueryService().findAllByQuery("select l from %s as l where l.parent.id=%i and l.child.id=%i" % (p.LINK_CLASS, p.id, self.id), None)
-        if len(link):
-            return link[0]
-        return None
+#    def _getParentLink (self):
+#        p = self.listParents()
+#        link = self._conn.getQueryService().findAllByQuery("select l from %s as l where l.parent.id=%i and l.child.id=%i" % (p.LINK_CLASS, p.id, self.id), None)
+#        if len(link):
+#            return link[0]
+#        return None
 
     def _moveLink (self, newParent):
         """ moves this object from the current parent container to a new one """
@@ -308,16 +273,12 @@ class BlitzObjectWrapper (object):
         """
         Lists available child objects.
 
-        @return: Generator yielding child objects.
+        @rtype: generator of BlitzObjectWrapper objs
+        @return: child objects.
         """
 
         childw = self._getChildWrapper()
         klass = childw().OMERO_CLASS
-#        if getattr(self, 'is%sLinksLoaded' % klass)():
-#            childns = getattr(self, 'copy%sLinks' % klass)()
-#            childnodes = [ x.child for x in childns]
-#            logger.debug('listChildren for %s %d: already loaded' % (self.OMERO_CLASS, self.getId()))
-#        else:
         if not params:
             params = omero.sys.Parameters()
         if not params.map:
@@ -326,8 +287,6 @@ class BlitzObjectWrapper (object):
         query = "select c from %s as c" % self.LINK_CLASS
         if ns is not None:
             params.map["ns"] = omero_type(ns)
-            #query += """ join c.child.annotationLinks ial
-            #             join ial.child as a """
         query += """ join fetch c.child as ch
                      left outer join fetch ch.annotationLinks as ial
                      left outer join fetch ial.child as a """
@@ -343,30 +302,18 @@ class BlitzObjectWrapper (object):
         for child in childnodes:
             yield childw(self._conn, child, self._cache)
 
-    #def listChildren_cached (self):
-    #    """ This version caches all child nodes for all parents, so next parent does not need to search again.
-    #    Good for full depth traversal, but a waste of time otherwise """
-    #    if self.CHILD_WRAPPER_CLASS is None: #pragma: no cover
-    #        raise NotImplementedError
-    #    if not self._cache.has_key(self.LINK_CLASS):
-    #        pdl = {}
-    #        for link in self._conn.getQueryService().findAll(self.LINK_CLASS, None):
-    #            pid = link.parent.id.val
-    #            if pdl.has_key(pid):
-    #                pdl[pid].append(link.child)
-    #            else:
-    #                pdl[pid] = [link.child]
-    #        self._cache[self.LINK_CLASS] = pdl
-    #    for child in self._cache[self.LINK_CLASS].get(self._oid, ()):
-    #        yield self.CHILD_WRAPPER_CLASS(self._conn, child, self._cache)
-
     def listParents (self, single=True, withlinks=False):
         """
         Lists available parent objects.
-        
-        @return: Generator yielding parent objects
+
+        @type single: boolean
+        @param single: if True returns only the immediate parent object, else returns a list
+                       of BlitzObjectWrapper with all parents linking to this object
+        @type withlinks: boolean
+        @param withlinks: if true each yielded result will be a tuple of (linkobj, obj)
+        @rtype: list of BlitzObjectWrapper (or tuples) or just the object (or tuple)
+        @return: the parent or parents, with or without the links depending on args
         """
-        
         if self.PARENT_WRAPPER_CLASS is None:
             if single:
                 return withlinks and (None, None) or None
@@ -2198,7 +2145,7 @@ class _ExperimenterWrapper (BlitzObjectWrapper):
 
     def __bstrap__ (self):
         self.OMERO_CLASS = 'Experimenter'
-        self.LINK_CLASS = "copyGroupExperimenterMap"
+        self.LINK_CLASS = "GroupExperimenterMap"
         self.CHILD_WRAPPER_CLASS = None
         self.PARENT_WRAPPER_CLASS = 'ExperimenterGroupWrapper'
 
@@ -2336,7 +2283,7 @@ class _ExperimenterGroupWrapper (BlitzObjectWrapper):
     
     def __bstrap__ (self):
         self.OMERO_CLASS = 'ExperimenterGroup'
-        self.LINK_CLASS = "copyGroupExperimenterMap"
+        self.LINK_CLASS = "GroupExperimenterMap"
         self.CHILD_WRAPPER_CLASS = 'ExperimenterWrapper'
         self.PARENT_WRAPPER_CLASS = None
 
@@ -2561,13 +2508,22 @@ class _ChannelWrapper (BlitzObjectWrapper):
             return LogicalChannelWrapper(self._conn, self._obj.logicalChannel)
     
     def getEmissionWave (self):
+        """
+        returns the logical channel name, emission wave or index. The first that is not null
+        in the described order.
+
+        The reference to emissionWave in the getter is historical.
+        
+        @rtype: string
+        @return: the logical channel string representation
+        """
         lc = self.getLogicalChannel()
         rv = lc.name
         if rv is None:
             rv = lc.emissionWave
         if rv is None:
             rv = self._idx
-        return rv
+        return unicode(rv)
 
     def getColor (self):
         return ColorHolder.fromRGBA(*self._re.getRGBA(self._idx))
