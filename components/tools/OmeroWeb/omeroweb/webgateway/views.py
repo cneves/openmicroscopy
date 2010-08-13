@@ -25,6 +25,7 @@ from cStringIO import StringIO
 from omero import client_wrapper, ApiUsageException
 from omero.gateway import timeit, TimeIt
 
+import Ice
 
 #from models import StoredConnection
 
@@ -405,11 +406,20 @@ def _get_prepared_image (request, iid, server_id=None, _conn=None, with_session=
         r.has_key('t') and img._re.setDefaultT(long(r['t'])-1)
         try:
             img.saveDefaults()
-        except:
-            # retry once, to get around "Session is dirty" exceptions
-            if retry:
-                return _get_prepared_image(request, iid=iid, server_id=server_id, _conn=_conn, with_session=with_session, saveDefs=saveDefs, retry=False)
-            raise
+        except Ice.Exception, x:
+            if x.serverExceptionClass == 'ome.conditions.InternalException':
+                if x.message.find('java.lang.NullPointerException') > 0:
+                    # This actually happens when saving rdefs owned by someone else, even
+                    # if we have permissions to write
+                    logger.debug("NullPointerException, ignoring")
+                elif x.message.find('Session is dirty') >= 0:
+                    if retry:
+                        # retry once, to get around "Session is dirty" exceptions
+                        return _get_prepared_image(request, iid=iid, server_id=server_id, _conn=_conn, with_session=with_session, saveDefs=saveDefs, retry=False)
+                    logger.debug("Session is dirty, bailing out")
+                    raise
+            else:
+                raise
     return (img, compress_quality)
 
 def render_image (request, iid, z, t, server_id=None, _conn=None, **kwargs):
@@ -467,10 +477,16 @@ def render_ome_tiff (request, ctx, cid, server_id=None, _conn=None, **kwargs):
             if tiff_data is None:
                 raise Http404
             webgateway_cache.setOmeTiffImage(request, server_id, imgs[0], tiff_data)
-        rsp = HttpResponse(tiff_data, mimetype='application/x-ome-tiff')
-        rsp['Content-Disposition'] = 'attachment; filename="%s.ome.tiff"' % obj.getName()
-        rsp['Content-Length'] = len(tiff_data)
-        return rsp
+        fpath, rpath, fobj = webgateway_tempfile.new(obj.getName() + '.ome.tiff')
+        if fobj is None:
+            rsp = HttpResponse(tiff_data, mimetype='application/x-ome-tiff')
+            rsp['Content-Disposition'] = 'attachment; filename="%s.ome.tiff"' % obj.getName()
+            rsp['Content-Length'] = len(tiff_data)
+            return rsp
+        else:
+            fobj.write(tiff_data)
+            fobj.close()
+            return HttpResponseRedirect('/appmedia/tfiles/' + rpath)
     else:
         try:
             fpath, rpath, fobj = webgateway_tempfile.new(name + '.zip')
