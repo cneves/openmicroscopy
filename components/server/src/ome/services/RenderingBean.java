@@ -1,5 +1,5 @@
 /*
- *   $Id: RenderingBean.java 5709 2009-11-13 14:39:15Z callan $
+ *   $Id: RenderingBean.java 7750 2010-08-16 11:23:10Z cneves-x $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -82,12 +82,12 @@ import org.springframework.transaction.annotation.Transactional;
  * @author Chris Allan, callan at blackcat.ca
  * @author Jean-Marie Burel, j.burel at dundee.ac.uk
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision: 5709 $, $Date: 2009-11-13 14:39:15 +0000 (Fri, 13 Nov 2009) $
+ * @version $Revision: 7750 $, $Date: 2010-08-16 12:23:10 +0100 (Mon, 16 Aug 2010) $
  * @see RenderingEngine
  * @since 3.0-M3
  */
-@RevisionDate("$Date: 2009-11-13 14:39:15 +0000 (Fri, 13 Nov 2009) $")
-@RevisionNumber("$Revision: 5709 $")
+@RevisionDate("$Date: 2010-08-16 12:23:10 +0100 (Mon, 16 Aug 2010) $")
+@RevisionNumber("$Revision: 7750 $")
 @Transactional(readOnly = true)
 public class RenderingBean implements RenderingEngine, Serializable {
 
@@ -732,8 +732,9 @@ public class RenderingBean implements RenderingEngine, Serializable {
                         @Transactional(readOnly = false)
                         public Object doWork(Session session, ServiceFactory sf) {
                             IPixels pixMetaSrv = sf.getPixelsService();
+			    long rendDefId = rendDefObj.getId();
                             pixMetaSrv.saveRndSettings(rendDefObj);
-                            return pixMetaSrv.retrieveRndSettings(pixelsObj.getId());
+                            return pixMetaSrv.loadRndSettings(rendDefId);
                         }});
             
             // Unload the linked pixels set to avoid transactional headaches on
