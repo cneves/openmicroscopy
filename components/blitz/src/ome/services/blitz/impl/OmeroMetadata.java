@@ -203,6 +203,13 @@ public class OmeroMetadata implements MetadataRetrieve {
                 qb.join("p.dimensionOrder", "do",   false, true);
                 qb.join("p.channels",       "c",    false, true);
                 qb.join("c.logicalChannel", "l",    false, true);
+                // Extra goodies for JCB annotations
+                qb.join("i.datasetLinks",   "d_link", false, true);
+                qb.join("d_link.parent",    "d", false, true);
+                qb.join("d.projectLinks",   "p_link", false, true);
+                qb.join("p_link.parent",    "p",    false, true);
+                qb.join("p.annotationLinks","p_a_link", true, true);
+                qb.join("p_a_link.child",   "p_a", true, true);
                 qb.where();
                 qb.and("i.id = " + id);
                 ome.model.core.Image _i =(ome.model.core.Image) qb.query(session).uniqueResult();

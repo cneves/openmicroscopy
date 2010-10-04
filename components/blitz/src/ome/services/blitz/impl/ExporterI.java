@@ -14,10 +14,14 @@ import java.io.RandomAccessFile;
 
 import javax.xml.transform.TransformerException;
 
+
+import loci.common.RandomAccessInputStream;
 import loci.formats.ImageWriter;
 import loci.formats.MetadataTools;
 import loci.formats.meta.IMetadata;
 import loci.formats.meta.MetadataRetrieve;
+import loci.formats.tiff.TiffParser;
+import loci.formats.tiff.TiffSaver;
 import ome.api.RawPixelsStore;
 import ome.conditions.ApiUsageException;
 import ome.conditions.InternalException;
@@ -32,6 +36,7 @@ import ome.system.ServiceFactory;
 import ome.util.messages.InternalMessage;
 import ome.xml.DOMUtil;
 import ome.xml.OMEXMLNode;
+import omero.RString;
 import omero.ServerError;
 import omero.api.AMD_Exporter_addImage;
 import omero.api.AMD_Exporter_generateTiff;
@@ -42,9 +47,13 @@ import omero.api.AMD_StatefulServiceInterface_close;
 import omero.api.AMD_StatefulServiceInterface_getCurrentEventContext;
 import omero.api.AMD_StatefulServiceInterface_passivate;
 import omero.api._ExporterOperations;
+import omero.model.Annotation;
+import omero.model.CommentAnnotation;
+import omero.model.Dataset;
 import omero.model.Image;
 import omero.model.ImageI;
 import omero.model.Pixels;
+import omero.model.Project;
 import omero.util.IceMapper;
 import omero.util.TempFileManager;
 
@@ -72,6 +81,15 @@ public class ExporterI extends AbstractAmdServant implements
     private final static Log log = LogFactory.getLog(ExporterI.class);
 
     private final static int MAX_SIZE = 1024 * 1024;
+
+    private final static String TITLE_NS =
+        "com.glencoesoftware.journal_bridge:publicationTitle";
+
+    private final static String CITATION_NS =
+        "com.glencoesoftware.journal_bridge:citation";
+
+    private final static String AUTHOR_NS =
+        "com.glencoesoftware.journal_bridge:authors";
 
     /**
      * Utility enum for asserting the state of Exporter instances.
@@ -302,6 +320,7 @@ public class ExporterI extends AbstractAmdServant implements
                             RawPixelsStore raw = null;
                             OmeroReader reader = null;
                             ImageWriter writer = null;
+                            boolean threwException = false;
                             try {
 
                                 Image image = retrieve.getImage(0);
@@ -329,16 +348,18 @@ public class ExporterI extends AbstractAmdServant implements
                                             .saveBytes(plane,
                                                     i == planeCount - 1);
                                 }
-                                retrieve = null;
-                                __cb.ice_response(file.length());
                             } catch (Exception e) {
                                 omero.InternalException ie = new omero.InternalException(
                                         null, null,
                                         "Error during TIFF generation");
                                 IceMapper.fillServerError(ie, e);
                                 __cb.ice_exception(ie);
+                                threwException = true;
                             } finally {
                                 cleanup(raw, reader, writer);
+                                if (!threwException) {
+                                    __cb.ice_response(file.length());
+                                }
                             }
 
                             return null; // see calls to __cb above
@@ -364,9 +385,11 @@ public class ExporterI extends AbstractAmdServant implements
                                 if (writer != null) {
                                     writer.close();
                                 }
+                                updateTiffCommentWithJcbPrefix();
                             } catch (Exception e) {
                                 log.error("Error closing writer", e);
                             }
+                            retrieve = null;
                         }
                     });
         } catch (Exception e) {
@@ -374,6 +397,74 @@ public class ExporterI extends AbstractAmdServant implements
             IceMapper.fillServerError(ie, e);
             __cb.ice_exception(ie);
         }
+    }
+
+    /**
+     * Injects a JCB XML comment prefix into the OME-XML of an OME-TIFF.
+     */
+    private void updateTiffCommentWithJcbPrefix() {
+        try {
+            RandomAccessInputStream inputStream = null;
+            try {
+                Image image = retrieve.getImage(0);
+                Dataset dataset = image.linkedDatasetList().get(0);
+                Project project = dataset.linkedProjectList().get(0);
+                CommentAnnotation citation = null;
+                CommentAnnotation title = null;
+                CommentAnnotation authors = null;
+                for (Annotation annotation : project.linkedAnnotationList()) {
+                    RString v = annotation.getNs();
+                    if (v == null) {
+                      continue;
+                    }
+                    String ns = v.getValue();
+                    if (CITATION_NS.equals(ns)) {
+                        citation = (CommentAnnotation) annotation;
+                    } else if (TITLE_NS.equals(ns)) {
+                        title = (CommentAnnotation) annotation;
+                    } else if (AUTHOR_NS.equals(ns)) {
+                        authors = (CommentAnnotation) annotation;
+                    }
+                }
+                String prefix = makeJcbPrefix(citation, title, authors);
+                String path = file.getAbsolutePath();
+                inputStream = new RandomAccessInputStream(path);
+                TiffParser tp = new TiffParser(inputStream);
+                String comment = tp.getComment();
+                String xmlPrefix = comment.substring(0, 38);
+                String content = comment.substring(38, comment.length() - 1);
+                comment = xmlPrefix + prefix + content;
+                TiffSaver.overwriteComment(path, comment);
+            } finally {
+                if (inputStream != null) {
+                    inputStream.close();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error during TIFF comment update.", e);
+        }
+    }
+
+    private String makeJcbPrefix(CommentAnnotation citation,
+                                 CommentAnnotation title,
+                                 CommentAnnotation authors) {
+        String prefix = "<!-- Copyright";
+        if (authors != null) {
+            String authorString = authors.getTextValue().getValue();
+            authorString = authorString.replace("|||", " ");
+            authorString = authorString.replace(";;;", ",");
+            prefix += " " + authorString;
+        }
+        if (title != null) {
+            prefix += String.format(" '%s'", title.getTextValue().getValue());
+        }
+        if (citation != null) {
+            prefix += " " + citation.getTextValue().getValue();
+        }
+        prefix += " Use covered by the terms and conditions as outlined at ";
+        prefix += "http://www.rupress.org/site/subscriptions/terms.xhtml -->";
+        log.info("Using JCB prefix: " + prefix);
+        return prefix;
     }
 
     /**
