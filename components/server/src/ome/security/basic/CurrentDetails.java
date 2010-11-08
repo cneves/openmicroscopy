@@ -1,5 +1,5 @@
 /*
- *   $Id: CurrentDetails.java 3721 2009-02-24 10:18:00Z jmoore $
+ *   $Id: CurrentDetails.java 8451 2010-11-01 12:18:25Z jmoore $
  *
  *   Copyright 2006 University of Dundee. All rights reserved.
  *   Use is subject to license terms supplied in LICENSE.txt
@@ -28,7 +28,8 @@ import ome.model.meta.Experimenter;
 import ome.model.meta.ExperimenterGroup;
 import ome.model.meta.Session;
 import ome.services.messages.RegisterServiceCleanupMessage;
-import ome.services.sessions.stats.CounterFactory;
+import ome.services.sessions.SessionContext;
+import ome.services.sessions.state.SessionCache;
 import ome.services.sessions.stats.SessionStats;
 import ome.services.util.ServiceHandler;
 import ome.system.EventContext;
@@ -58,19 +59,16 @@ public class CurrentDetails implements PrincipalHolder {
 
     private static Log log = LogFactory.getLog(CurrentDetails.class);
 
-    private final CounterFactory factory;
+    private final SessionCache cache;
 
     private final ThreadLocal<LinkedList<BasicEventContext>> contexts = new ThreadLocal<LinkedList<BasicEventContext>>();
 
     public CurrentDetails() {
-        // Has very high limits set, and will not be able
-        // to publish an event with out the publisher.
-        // Message logged at error level.
-        this.factory = new CounterFactory();
+        this.cache = null;
     }
     
-    public CurrentDetails(CounterFactory factory) {
-        this.factory = factory;
+    public CurrentDetails(SessionCache cache) {
+        this.cache = cache;
     }
     
     private LinkedList<BasicEventContext> list() {
@@ -94,8 +92,12 @@ public class CurrentDetails implements PrincipalHolder {
     }
 
     public void login(Principal principal) {
-        BasicEventContext c = new BasicEventContext(principal, factory
-                .createStats());
+        // Can't use the method in SessionManager since that leads to a
+        // circular reference in Spring.
+        final String uuid = principal.getName();
+        final SessionContext ctx = cache.getSessionContext(uuid);
+        final SessionStats stats = ctx.stats();
+        final BasicEventContext c = new BasicEventContext(principal, stats);
         login(c);
     }
 

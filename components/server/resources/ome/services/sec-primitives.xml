@@ -25,9 +25,9 @@
   </description>
 
   <bean id="currentDetails" class="ome.security.basic.CurrentDetails">
-    <constructor-arg ref="threadCounterFactory"/>
+    <constructor-arg ref="sessionCache"/>
   </bean>
-  
+
   <alias name="currentDetails" alias="principalHolder"/>
 
   <bean id="internalServiceFactory" class="ome.tools.spring.InternalServiceFactory"/>
@@ -45,7 +45,7 @@
     <constructor-arg ref="sharingACLVoter"/>
     <constructor-arg ref="basicACLVoter"/>
   </bean>
-    
+
   <bean id="sharingACLVoter" class="ome.security.sharing.SharingACLVoter">
     <constructor-arg ref="systemTypes"/>
     <constructor-arg ref="currentDetails"/>
@@ -72,7 +72,6 @@
   <bean name="sessionCache" class="ome.services.sessions.state.SessionCache">  
     <property name="cacheManager"  ref="cacheManager"/>
     <property name="updateInterval" value="${omero.sessions.sync_force}"/><!-- ms -->
-    <property name="allowedBlockTime" value="${omero.sessions.sync_wait}"/><!-- ms -->
   </bean>
 
   <bean name="sessionManager" class="ome.services.sessions.SessionManagerImpl"
@@ -118,7 +117,6 @@
   -->
 
   <bean id="perSessionStats" class="ome.services.sessions.stats.PerSessionStats">
-    <constructor-arg ref="sessionManager"/>
     <constructor-arg ref="currentDetails"/>
   </bean>
 

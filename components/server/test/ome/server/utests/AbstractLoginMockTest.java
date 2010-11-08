@@ -42,7 +42,7 @@ import org.testng.annotations.Test;
 /**
  * @author Josh Moore &nbsp;&nbsp;&nbsp;&nbsp; <a
  *         href="mailto:josh.moore@gmx.de">josh.moore@gmx.de</a>
- * @version 1.0 <small> (<b>Internal version:</b> $Rev: 3448 $ $Date: 2009-02-04 15:55:18 +0000 (Wed, 04 Feb 2009) $) </small>
+ * @version 1.0 <small> (<b>Internal version:</b> $Rev: 8452 $ $Date: 2010-11-01 12:18:27 +0000 (Mon, 01 Nov 2010) $) </small>
  * @since Omero 2.0
  */
 @Test
@@ -134,7 +134,7 @@ public class AbstractLoginMockTest extends MockObjectTestCase {
         d.getGroup().setName("system");
         s.getDetails().copy(d);
         SessionContextImpl sci = new SessionContextImpl(s, LEADER_OF_GROUPS,
-                MEMBER_OF_GROUPS, USER_ROLES, new NullSessionStats());
+                MEMBER_OF_GROUPS, USER_ROLES, new NullSessionStats(), null);
         mockMgr.expects(once()).method("getEventContext")
                 .will(returnValue(sci));
         INITIAL_EVENT.setType(BOOTSTRAP);

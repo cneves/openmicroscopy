@@ -64,7 +64,7 @@ import org.springframework.util.Assert;
  * {@link CurrentDetails} to provide the security infrastructure.
  * 
  * @author Josh Moore, josh.moore at gmx.de
- * @version $Revision: 6234 $, $Date: 2007-06-02 12:31:30 +0200 (Sat, 02 Jun
+ * @version $Revision: 8448 $, $Date: 2007-06-02 12:31:30 +0200 (Sat, 02 Jun
  *          2007) $
  * @see Token
  * @see SecuritySystem
@@ -72,8 +72,8 @@ import org.springframework.util.Assert;
  * @see Permissions
  * @since 3.0-M3
  */
-@RevisionDate("$Date: 2010-03-09 15:20:31 +0000 (Tue, 09 Mar 2010) $")
-@RevisionNumber("$Revision: 6234 $")
+@RevisionDate("$Date: 2010-11-01 12:18:19 +0000 (Mon, 01 Nov 2010) $")
+@RevisionNumber("$Revision: 8448 $")
 public class BasicSecuritySystem implements SecuritySystem,
         ApplicationContextAware {
 
@@ -105,7 +105,7 @@ public class BasicSecuritySystem implements SecuritySystem,
         SystemTypes st = new SystemTypes();
         TokenHolder th = new TokenHolder();
         OmeroInterceptor oi = new OmeroInterceptor(st, new ExtendedMetadata(),
-                cd, th, new PerSessionStats(cd, sm));
+                cd, th, new PerSessionStats(cd));
         BasicSecuritySystem sec = new BasicSecuritySystem(oi, st, cd, sm,
                 new Roles(), sf, new TokenHolder());
         return sec;

@@ -9,6 +9,7 @@ package ome.services.sessions;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,7 @@ import ome.services.messages.CreateSessionMessage;
 import ome.services.messages.DestroySessionMessage;
 import ome.services.sessions.events.UserGroupUpdateEvent;
 import ome.services.sessions.state.SessionCache;
-import ome.services.sessions.state.SessionCache.StaleCacheListener;
+import ome.services.sessions.state.SessionCache;
 import ome.services.sessions.stats.CounterFactory;
 import ome.services.sessions.stats.SessionStats;
 import ome.services.util.Executor;
@@ -73,7 +74,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @author Josh Moore, josh at glencoesoftware.com
  * @since 3.0-Beta3
  */
-public class SessionManagerImpl implements SessionManager, StaleCacheListener,
+public class SessionManagerImpl implements SessionManager, SessionCache.StaleCacheListener,
         ApplicationContextAware {
 
     private final static Log log = LogFactory.getLog(SessionManagerImpl.class);
@@ -217,9 +218,9 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         // If credentials exist as session, then return that
         try {
             SessionContext context = cache
-                    .getSessionContext(credentials, false);
+                    .getSessionContext(credentials);
             if (context != null) {
-                context.increment();
+                context.count().increment();
                 return context.getSession(); // EARLY EXIT!
             }
         } catch (SessionException se) {
@@ -265,10 +266,9 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
             final Session oldsession) {
         // If username exists as session, then return that
         try {
-            SessionContext context = cache.getSessionContext(principal
-                    .getName(), false);
+            SessionContext context = cache.getSessionContext(principal.getName());
             if (context != null) {
-                context.increment();
+                context.count().increment();
                 return context.getSession(); // EARLY EXIT!
             }
         } catch (SessionException se) {
@@ -311,7 +311,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
             throw new RemovedSessionException("No info in database for "
                     + principal);
         }
-        SessionContext newctx = createSessionContext(rv);
+        SessionContext newctx = createSessionContext(rv, null);
 
         // This the publishEvent returns successfully, then we will have to
         // handle rolling back this addition our selves
@@ -326,7 +326,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         }
 
         // All successful, increment and return.
-        newctx.increment();
+        newctx.count().increment();
         return newctx.getSession();
     }
 
@@ -342,7 +342,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
 
         final String uuid = session.getUuid();
         final Details details = session.getDetails();
-        final SessionContext ctx = cache.getSessionContext(uuid, true);
+        final SessionContext ctx = cache.getSessionContext(uuid);
         if (ctx == null) {
             throw new RemovedSessionException(
                     "Can't update; No session with uuid:" + uuid);
@@ -408,13 +408,14 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         });
 
         if (list == null) {
+            log.info("removeSession on update: " + uuid);
             cache.removeSession(uuid);
             throw new RemovedSessionException("Database contains no info for "
                     + uuid);
         }
         ;
 
-        final SessionContext newctx = createSessionContext(list);
+        final SessionContext newctx = createSessionContext(list, ctx);
         final Session copy = copy(orig);
         executor.execute(asroot, new Executor.SimpleWork(this, "update") {
             @Transactional(readOnly = false)
@@ -436,7 +437,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
      * null.
      */
     @SuppressWarnings("unchecked")
-    protected SessionContext createSessionContext(List<?> list) {
+    protected SessionContext createSessionContext(List<?> list, SessionContext previous) {
 
         final Experimenter exp = (Experimenter) list.get(0);
         final ExperimenterGroup grp = (ExperimenterGroup) list.get(1);
@@ -454,57 +455,61 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
 
         SessionContext sessionContext = new SessionContextImpl(session,
                 leaderOfGroupsIds, memberOfGroupsIds, userRoles, factory
-                        .createStats());
+                        .createStats(), roles, previous);
         return sessionContext;
     }
 
     public Session find(String uuid) {
-        SessionContext sessionContext = cache.getSessionContext(uuid, true);
+        SessionContext sessionContext = cache.getSessionContext(uuid);
         return (sessionContext == null) ? null : sessionContext.getSession();
     }
 
     public int getReferenceCount(String uuid) {
-        SessionContext ctx = cache.getSessionContext(uuid, true);
-        return ctx.refCount();
+        SessionContext ctx = cache.getSessionContext(uuid);
+        return ctx.count().get();
     }
 
     public int detach(String uuid) {
-        SessionContext ctx = cache.getSessionContext(uuid, false);
-        return ctx.decrement();
+        SessionContext ctx = cache.getSessionContext(uuid);
+        return ctx.count().decrement();
     }
 
     public SessionStats getSessionStats(String uuid) {
-        SessionContext ctx = cache.getSessionContext(uuid, true);
+        SessionContext ctx = cache.getSessionContext(uuid);
         return ctx.stats();
     }
 
     /*
      */
     public int close(String uuid) {
-
         SessionContext ctx;
         try {
-            ctx = cache.getSessionContext(uuid, false);
+            ctx = cache.getSessionContext(uuid);
         } catch (SessionException se) {
+            log.info("closeSession called but doesn't exist: " + uuid);
             return -1; // EARLY EXIT!
         }
 
-        int refCount = ctx.decrement();
+        int refCount = ctx.count().decrement();
         if (refCount < 1) {
+            log.info("closeSession called and no more references: " + uuid);
             cache.removeSession(uuid);
             return -2;
         } else {
+            log.info("closeSession called but " + refCount
+                    + " more references: " + uuid);
             return refCount;
         }
     }
 
     public int closeAll() {
-        List<String> ids = cache.getIds();
+        Collection<String> ids = cache.getIds();
         for (String id : ids) {
             if (asroot.getName().equals(id)) {
                 continue; // DON'T KILL OUR ROOT SESSION
             }
             try {
+                log.info("closeAll called for " + id);
                 cache.removeSession(id);
             } catch (RemovedSessionException rse) {
                 // Ok. Done for us
@@ -519,7 +524,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
     }
 
     public List<String> getUserRoles(String uuid) {
-        SessionContext ctx = cache.getSessionContext(uuid, true);
+        SessionContext ctx = cache.getSessionContext(uuid);
         if (ctx == null) {
             throw new RemovedSessionException("No session with uuid: " + uuid);
         }
@@ -626,8 +631,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
     // =========================================================================
 
     public EventContext getEventContext(Principal principal) {
-        final SessionContext ctx = cache.getSessionContext(principal.getName(),
-                true);
+        final SessionContext ctx = cache.getSessionContext(principal.getName());
         if (ctx == null) {
             throw new RemovedSessionException("No session with uuid:"
                     + principal.getName());
@@ -828,12 +832,12 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
      * Will be called in a synchronized block by {@link SessionCache} in order
      * to allow for an update.
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public SessionContext reload(final SessionContext ctx) {
         final Principal p = new Principal(ctx.getCurrentUserName(), ctx
                 .getCurrentGroupName(), ctx.getCurrentEventType());
         List list = (List) executor.execute(asroot, new Executor.SimpleWork(
-                this, "reload") {
+                this, "reload", ctx.getSession().getUuid()) {
             @Transactional(readOnly = true)
             public Object doWork(org.hibernate.Session session,
                     ServiceFactory sf) {
@@ -843,7 +847,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
         if (list == null) {
             return null;
         }
-        return createSessionContext(list);
+        return createSessionContext(list, ctx);
     }
 
     // Executor methods
@@ -890,7 +894,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
     private boolean executeCheckPasswordRO(final Principal _principal,
             final String credentials) {
         return (Boolean) executor.execute(asroot, new Executor.SimpleWork(this,
-                "executeCheckPassword") {
+                "executeCheckPasswordRO", _principal) {
             @Transactional(readOnly = true)
             public Object doWork(org.hibernate.Session session,
                     ServiceFactory sf) {
@@ -903,7 +907,7 @@ public class SessionManagerImpl implements SessionManager, StaleCacheListener,
     private boolean executeCheckPasswordRW(final Principal _principal,
             final String credentials) {
         return (Boolean) executor.execute(asroot, new Executor.SimpleWork(this,
-                "executeCheckPassword") {
+                "executeCheckPasswordRW", _principal) {
             @Transactional(readOnly = false)
             public Object doWork(org.hibernate.Session session,
                     ServiceFactory sf) {

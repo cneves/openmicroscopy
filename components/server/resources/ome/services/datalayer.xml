@@ -7,7 +7,7 @@
 <!--
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-# $Id: datalayer.xml 4824 2009-09-07 08:28:23Z jmoore $
+# $Id: datalayer.xml 8454 2010-11-01 12:18:30Z jmoore $
 #
 # Copyright 2006 University of Dundee. All rights reserved.
 # Use is subject to license terms supplied in LICENSE.txt
@@ -103,10 +103,6 @@
   <alias name="txAwareDataSource" alias="dataSource"/>
 
   <bean id="txAwareDataSource" class="org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy">
-    <property name="targetDataSource" ref="lazyDataSource"/>
-  </bean>
-
-  <bean id="lazyDataSource" class="org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy">
     <property name="targetDataSource" ref="selfCorrectingDataSource"/>
   </bean>
 
