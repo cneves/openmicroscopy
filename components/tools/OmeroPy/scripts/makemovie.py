@@ -335,7 +335,7 @@ def unrollPlaneMap(planeMap):
 				unrolledPlaneMap.append([int(t),int(z)]);
 	return unrolledPlaneMap
 
-def calculateRanges(sizeZ, sizeT, commandArgs):
+def calculateRanges(sizeZ, sizeT, commandArgs, invert=False):
 	planeMap = {};
 	if(commandArgs["planeMap"]=={}):
 		if(commandArgs["zStart"]<0):
@@ -355,7 +355,10 @@ def calculateRanges(sizeZ, sizeT, commandArgs):
 		
 		zRange = range(commandArgs["zStart"], commandArgs["zEnd"]+1);
 		tRange = range(commandArgs["tStart"], commandArgs["tEnd"]+1);
-		planeMap = buildPlaneMapFromRanges(zRange, tRange);
+		if invert:
+			planeMap = buildPlaneMapFromRanges(tRange, zRange);
+		else:
+			planeMap = buildPlaneMapFromRanges(zRange, tRange);
 	else:
 		map = commandArgs["planeMap"];
 		planeMap = unrollPlaneMap(map);
@@ -408,6 +411,8 @@ def buildMovie (commandArgs, session, omeroImage, pixels, renderingEngineCB):
         print "buildMovie: %s" % str(commandArgs)
 	pixelsId = pixels.getId().getValue();
 
+	invert = omeroImage.isInvertedAxis()
+
 	sizeX = pixels.getSizeX().getValue();
 	sizeY = pixels.getSizeY().getValue();
 	sizeZ = pixels.getSizeZ().getValue();
@@ -428,7 +433,10 @@ def buildMovie (commandArgs, session, omeroImage, pixels, renderingEngineCB):
 
         commandArgs['font'] = commandArgs.get('font', ImageFont.load_default())
 
-	tzList = calculateRanges(sizeZ, sizeT, commandArgs);
+	if invert:
+		sizeZ, sizeT = sizeT, sizeZ
+
+	tzList = calculateRanges(sizeZ, sizeT, commandArgs, invert);
 
 	timeMap = calculateAquisitionTime(session, pixelsId, cRange, tzList)
 	if(timeMap==None):
@@ -469,7 +477,10 @@ def buildMovie (commandArgs, session, omeroImage, pixels, renderingEngineCB):
 			time = timeMap[planeInfo]
 			image = addTimePoints(time, pixels, image, commandArgs);
 		if(commandArgs["showPlaneInfo"]==1):
-			image = addPlaneInfo(z, t, pixels, image, commandArgs);
+			if invert:
+				image = addPlaneInfo(t, z, pixels, image, commandArgs);
+			else:
+				image = addPlaneInfo(z, t, pixels, image, commandArgs);
                 image.save(filename,"JPEG")
                 filelist.append(filename)
 		frameNo +=1;

@@ -191,12 +191,16 @@ class BlitzObjectWrapper (object):
     def _moveLink (self, newParent):
         """ moves this object from the current parent container to a new one """
         p = self.listParents()
-        if type(p) == type(newParent):
+        # p._obj.__class__ == p._obj.__class__ ImageWrapper(omero.model.DatasetI())
+        if p.OMERO_CLASS == newParent.OMERO_CLASS:
             link = self._conn.getQueryService().findAllByQuery("select l from %s as l where l.parent.id=%i and l.child.id=%i" % (p.LINK_CLASS, p.id, self.id), None)
             if len(link):
                 link[0].parent = newParent._obj
                 self._conn.getUpdateService().saveObject(link[0])
                 return True
+            logger.debug("## query didn't return objects: 'select l from %s as l where l.parent.id=%i and l.child.id=%i'" % (p.LINK_CLASS, p.id, self.id))
+        else:
+            logger.debug("## %s != %s ('%s' - '%s')" % (type(p), type(newParent), str(p), str(newParent)))
         return False
 
     def findChildByName (self, name, description=None):
@@ -886,8 +890,8 @@ class _BlitzGateway (object):
         self._proxies = NoProxies()
         logger.info("closed connecion (uuid=%s)" % str(self._sessionUuid))
 
-    def __del__ (self):
-        logger.debug("##GARBAGE COLLECTOR KICK IN")
+#    def __del__ (self):
+#        logger.debug("##GARBAGE COLLECTOR KICK IN")
     
     def _createProxies (self):
         """
