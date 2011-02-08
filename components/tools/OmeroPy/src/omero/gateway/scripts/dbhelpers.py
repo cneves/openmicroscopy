@@ -19,7 +19,7 @@ TESTIMG_URL = 'http://users.openmicroscopy.org.uk/~cneves-x/'
 
 #Gateway = omero.gateway.BlitzGateway
 
-def refreshConfig():
+def refreshConfig ():
     bg = omero.gateway.BlitzGateway()
     ru = bg.c.ic.getProperties().getProperty('omero.rootuser')
     rp = bg.c.ic.getProperties().getProperty('omero.rootpass')
