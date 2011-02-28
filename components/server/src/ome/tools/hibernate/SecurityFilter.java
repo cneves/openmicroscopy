@@ -8,10 +8,9 @@
 package ome.tools.hibernate;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
-
-import org.springframework.beans.factory.FactoryBean;
-import org.springframework.orm.hibernate3.FilterDefinitionFactoryBean;
 
 import ome.conditions.InternalException;
 import ome.model.internal.Details;
@@ -20,6 +19,11 @@ import ome.model.internal.Permissions.Right;
 import ome.model.internal.Permissions.Role;
 import static ome.model.internal.Permissions.Role.*;
 import static ome.model.internal.Permissions.Right.*;
+import ome.security.basic.OmeroInterceptor;
+import ome.system.Roles;
+
+import org.springframework.beans.factory.FactoryBean;
+import org.springframework.orm.hibernate3.FilterDefinitionFactoryBean;
 
 /**
  * overrides {@link FilterDefinitionFactoryBean} in order to construct our
@@ -51,40 +55,48 @@ public class SecurityFilter extends FilterDefinitionFactoryBean {
 
     static public final String filterName = "securityFilter";
 
-    static private final Properties parameterTypes = new Properties();
-
-    static private String defaultFilterCondition;
-    static {
-        parameterTypes.setProperty(is_share, "java.lang.Boolean");
-        parameterTypes.setProperty(is_admin, "java.lang.Boolean");
-        parameterTypes.setProperty(current_user, "long");
-        parameterTypes.setProperty(current_groups, "long");
-        parameterTypes.setProperty(leader_of_groups, "long");
-        // This can't be done statically because we need the securitySystem.
-        defaultFilterCondition = String.format("\n( "
-                + "\n :is_share OR \n :is_admin OR "
-                + "\n (group_id in (:leader_of_groups)) OR "
-                + "\n (owner_id = :current_user AND %s) OR " + // 1st arg U
-                "\n (group_id in (:current_groups) AND %s) OR " + // 2nd arg G
-                "\n (%s) " + // 3rd arg W
-                "\n)\n", isGranted(USER, READ), isGranted(GROUP, READ),
-                isGranted(WORLD, READ));
+    static Map<String, String> parameterTypes() {
+        Map<String, String> parameterTypes = new HashMap<String, String>();
+        parameterTypes.put(is_share, "int");
+        parameterTypes.put(is_admin, "int");
+        parameterTypes.put(current_user, "long");
+        parameterTypes.put(current_groups, "long");
+        parameterTypes.put(leader_of_groups, "long");
+        return parameterTypes;
     }
+
+    /**
+     * Query-fragment to be used to determine if all bits in a
+     * permissions column are set.
+     */
+    private final String bitand;
 
     /**
      * default constructor which calls all the necessary setters for this
      * {@link FactoryBean}. Also constructs the {@link #defaultFilterCondition }
      * This query clause must be kept in sync with
      * {@link #passesFilter(Details, Long, Collection, Collection, boolean)}
-     * 
+     *
      * @see #passesFilter(Details, Long, Collection, Collection, boolean)
      * @see FilterDefinitionFactoryBean#setFilterName(String)
      * @see FilterDefinitionFactoryBean#setParameterTypes(Properties)
      * @see FilterDefinitionFactoryBean#setDefaultFilterCondition(String)
      */
-    public SecurityFilter() {
+    public SecurityFilter(String bitand) {
+        this.bitand = bitand;
+        // This can't be done statically because we need the securitySystem.
+        // and bitand
+        String defaultFilterCondition = String.format("\n( "
+                + "\n 1 = :is_share OR \n 1 = :is_admin OR "
+                + "\n (group_id in (:leader_of_groups)) OR "
+                + "\n (owner_id = :current_user AND %s) OR " + // 1st arg U
+                "\n (group_id in (:current_groups) AND %s) OR " + // 2nd arg G
+                "\n (%s) " + // 3rd arg W
+                "\n)\n", isGranted(USER, READ), isGranted(GROUP, READ),
+                isGranted(WORLD, READ));
+
         this.setFilterName(filterName);
-        this.setParameterTypes(parameterTypes);
+        this.setParameterTypes(parameterTypes());
         this.setDefaultFilterCondition(defaultFilterCondition);
     }
 
@@ -146,12 +158,10 @@ public class SecurityFilter extends FilterDefinitionFactoryBean {
     // ~ Helpers
     // =========================================================================
 
-    protected static String isGranted(Role role, Right right) {
+    protected String isGranted(Role role, Right right) {
         String bit = "" + Permissions.bit(role, right);
         String isGranted = String
-                .format(
-                        "(cast(permissions as bit(64)) & cast(%s as bit(64))) = cast(%s as bit(64))",
-                        bit, bit);
+                .format(bitand, bit, bit);
         return isGranted;
     }
 

@@ -29,6 +29,11 @@ import ome.conditions.InternalException;
 import ome.conditions.SecurityViolation;
 import ome.conditions.ValidationException;
 import ome.model.IObject;
+import ome.model.annotations.ExperimenterAnnotationLink;
+import ome.model.annotations.FileAnnotation;
+import ome.model.core.Image;
+import ome.model.core.OriginalFile;
+import ome.model.core.Pixels;
 import ome.model.internal.Permissions;
 import ome.model.internal.Permissions.Flag;
 import ome.model.meta.Event;
@@ -37,7 +42,6 @@ import ome.model.meta.ExperimenterGroup;
 import ome.parameters.Parameters;
 import ome.security.ACLVoter;
 import ome.security.AdminAction;
-import ome.security.LdapUtil;
 import ome.security.PasswordUtil;
 import ome.security.SecureAction;
 import ome.security.SecuritySystem;
@@ -55,19 +59,19 @@ import ome.system.OmeroContext;
 import ome.system.Roles;
 import ome.system.SimpleEventContext;
 import ome.tools.hibernate.QueryBuilder;
+import ome.tools.hibernate.SecureMerge;
+import ome.tools.hibernate.SessionFactory;
+import ome.util.SqlAction;
 import ome.util.Utils;
 
 import org.hibernate.Criteria;
 import org.hibernate.EmptyInterceptor;
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
-import org.hibernate.SessionFactory;
 import org.hibernate.criterion.Restrictions;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.jdbc.core.simple.SimpleJdbcOperations;
-import org.springframework.jdbc.core.simple.SimpleJdbcTemplate;
 import org.springframework.mail.MailSender;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.orm.hibernate3.HibernateCallback;
@@ -95,9 +99,9 @@ import org.springframework.util.Assert;
 public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
         ApplicationContextAware {
 
-    protected final SimpleJdbcOperations jdbc;
+    protected final SqlAction sql;
 
-    protected final SessionFactory sf;
+    protected final SessionFactory osf;
 
     protected final MailSender mailSender;
 
@@ -116,12 +120,12 @@ public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
         this.context = (OmeroContext) ctx;
     }
     
-    public AdminImpl(SimpleJdbcOperations jdbc, SessionFactory sf,
+    public AdminImpl(SqlAction sql, SessionFactory osf,
             MailSender mailSender, SimpleMailMessage templateMessage,
             ACLVoter aclVoter, PasswordProvider passwordProvider,
             RoleProvider roleProvider) {
-        this.jdbc = jdbc;
-        this.sf = sf;
+        this.sql = sql;
+        this.osf = osf;
         this.mailSender = mailSender;
         this.templateMessage = templateMessage;
         this.aclVoter = aclVoter;
@@ -292,12 +296,12 @@ public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
     @Transactional(readOnly = true)
     @RolesAllowed("user")
     public List<Map<String, Object>> lookupLdapAuthExperimenters() {
-        return LdapUtil.lookupLdapAuthExperimenters(jdbc);
+        return sql.dnExperimenterMaps();
     }
 
     @RolesAllowed("user")
     public String lookupLdapAuthExperimenter(long id) {
-        return LdapUtil.lookupLdapAuthExperimenter(jdbc, id);
+        return sql.dnForUser(id);
     }
 
     @RolesAllowed("user")
@@ -577,8 +581,7 @@ public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
     @RolesAllowed("system")
     public void deleteExperimenter(Experimenter user) {
         Experimenter e = userProxy(user.getId());
-        int count = jdbc.update(
-                "delete from password where experimenter_id = ?", e.getId());
+        int count = sql.removePassword(e.getId());
 
         if (count == 0) {
             getBeanHelper().getLogger().info(
@@ -685,7 +688,8 @@ public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
         // create a new session. It's important that we pass in the empty
         // interceptor here, otherwise even root wouldn't be allowed to unlock
         // the instance.
-        Session s = SessionFactoryUtils.getNewSession(sf,
+        Session tmp = osf.getSession();
+        Session s = SessionFactoryUtils.getNewSession(tmp.getSessionFactory(),
                 EmptyInterceptor.INSTANCE);
 
         // similarly, we need to disable certain backend systems. first we
@@ -841,7 +845,7 @@ public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
     }
 
     private boolean isDnById(long id) {
-        String dn = PasswordUtil.getDnById(jdbc, id);
+        String dn = sql.dnForUser(id);
         if (dn != null) {
             return true;
         } else {
@@ -904,10 +908,6 @@ public class AdminImpl extends AbstractLevel2Service implements LocalAdmin,
     }
 
     /**
-     * Jumps through some hurdles (see
-     * {@link PasswordUtil#userId(SimpleJdbcTemplate, String)} to not have to
-     * use Hibernate in order to prevent unauthorized access to Hibernate.
-     * 
      * If ldap plugin turned, creates Ldap accounts and authentication by LDAP
      * available.
      */

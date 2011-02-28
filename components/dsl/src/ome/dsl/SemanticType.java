@@ -9,6 +9,8 @@ package ome.dsl;
 
 // Java imports
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 // Third-party libraries
 
@@ -31,6 +34,22 @@ import java.util.Set;
  * @since OMERO-3.0
  */
 public abstract class SemanticType {
+
+    // Patterns for reducing name lengths
+    final static private Pattern annPattern = Pattern.compile("annotation");
+    final static private Pattern cntPattern = Pattern.compile("FK_count_to");
+    final static private Pattern grpPattern = Pattern.compile("experimentergroup");
+    final static private Pattern acqPattern = Pattern.compile("screenacquisition");
+
+    final static private String VM_QUOTE = "\\\"";
+
+    public final static Set<String> RESTRICTED_COLUMNS = Collections
+    .unmodifiableSet(new HashSet<String>(Arrays.asList("column",
+            "constant", "file", "group", "mode", "power", "ref",
+            "reverse", "rows", "row", "session", "size")));
+
+    public final static Set<String> RESTRICTED_TABLE = Collections
+    .unmodifiableSet(new HashSet<String>(Arrays.asList("session", "share")));
 
     // TYPE identifiers
     public final static String ABSTRACT = "abstract";
@@ -65,6 +84,13 @@ public abstract class SemanticType {
         TYPES2CLASSES.put(ENUM, EnumType.class);
     }
 
+    /**
+     * Database profile, i.e. ${omero.db.profile}.
+     *
+     * @see ticket:73
+     */
+    public final String profile;
+
     // all properties
     private List<Property> properties = new ArrayList<Property>();
 
@@ -97,7 +123,8 @@ public abstract class SemanticType {
      * sets the the various properties available in attrs USING DEFAULTS IF NOT
      * AVAILABLE. Subclasses may override these values.
      */
-    public SemanticType(Properties attrs) {
+    public SemanticType(String profile, Properties attrs) {
+        this.profile = profile;
         setId(attrs.getProperty("id", getId()));
         setTable(typeToColumn(getId()));
         if (null == getId()) {
@@ -119,6 +146,14 @@ public abstract class SemanticType {
 
     }
 
+    /**
+     * A database is "restrictive" if it prevents the use of certain columns
+     * and table names, both keywords and lengths.
+     */
+    public boolean isRestrictive() {
+        return ! profile.equals("psql");
+    }
+
     public void validate() {
         // Left empty in-case anyone forgets to override.
     }
@@ -127,7 +162,7 @@ public abstract class SemanticType {
      * creates a new type based on the element-valued key in TYPES2CLASSES. Used
      * mainly by the xml reader
      */
-    public static SemanticType makeNew(String element, Properties attributes)
+    public static SemanticType makeNew(String profile, String element, Properties attributes)
             throws IllegalArgumentException, IllegalStateException {
         Class klass = (Class) TYPES2CLASSES.get(element);
 
@@ -140,8 +175,8 @@ public abstract class SemanticType {
 
         try {
             st = (SemanticType) klass.getConstructor(
-                    new Class[] { Properties.class }).newInstance(
-                    new Object[] { attributes });
+                    new Class[] { String.class, Properties.class }).newInstance(
+                    new Object[] { profile, attributes });
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Cannot instantiate class " + klass, e);
@@ -215,12 +250,135 @@ public abstract class SemanticType {
         return id.substring(getLastDotInId() + 1, id.length());
     }
 
+    /**
+     * Read-only property. Introduced during ticket:73 in order to handle
+     * databases with relation name length restrictions.
+     */
+    public String countName(Property p) {
+        String countName = String.format(
+                "count_%s_%s_by_owner",
+                getShortname(),
+                p.getName());
+        return reduce(replace(countName));
+    }
+
+    /**
+     * Read-only property. Introduced during ticket:73 in order to handle
+     * databases with relation name length restrictions.
+     */
+    public String indexName(Property p) {
+        String indexName = String.format(
+                "i_%s_%s",
+                getShortname(),
+                p.getName());
+        return reduce(replace(indexName));
+    }
+
+    public String columnName(Property p) {
+        return columnName(p, VM_QUOTE);
+    }
+
+    public String columnName(Property p, String quote) {
+        String columnName = p.getName();
+        if (RESTRICTED_COLUMNS.contains(columnName)) {
+            columnName = quote(columnName, quote);
+        }
+        return columnName;
+    }
+
+    public String tableName() {
+        SemanticType base = this;
+        while (base.superclass != null && base.getDiscriminator() != null) {
+            base = base.superclass;
+        }
+        String tableName = base.getTable();
+        if (isRestrictive() && RESTRICTED_TABLE.contains(tableName)) {
+            tableName = tableName + "_";
+        }
+        return reduce(tableName);
+    }
+
+    public String inverse(Property p) {
+        String inverse = p.getInverse();
+        if (RESTRICTED_COLUMNS.contains(inverse)) {
+            inverse = quote(inverse);
+        }
+        return inverse;
+    }
+
+    public String typeAnnotation(Property p) {
+        String typeAnnotation = p.getTypeAnnotation();
+        typeAnnotation = typeAnnotation.replace("@PROFILE@", profile);
+        if (isRestrictive()) {
+            if (typeAnnotation.contains("TextType")) {
+                typeAnnotation = "@org.hibernate.annotations.ColumnTransformer(read=\"to_char("+
+                columnName(p) + ")\")";
+            } else if ("java.lang.String".equals(p.getType()) && ! p.getNullable()) {
+                // See ticket:3884
+                typeAnnotation = "@org.hibernate.annotations.ColumnTransformer(write=\"coalesce(?, ' ')\")";
+            }
+        }
+
+        return typeAnnotation;
+    }
+
+    public String propName(Property p) {
+        String name = p.getName();
+        if (RESTRICTED_COLUMNS.contains(name)) {
+            name = quote(name);
+        }
+        return name;
+    }
+
     public void setTable(String table) {
         this.table = table;
     }
 
     public String getTable() {
         return table;
+    }
+
+    public String getSequenceName() {
+        // Since in the restrictive databases that we have at the moment
+        // sequences aren't objects but rows in a table, we can keep this
+        // as it is.
+        return getTable();
+    }
+
+    public String fk(String fkvalue) {
+        return reduce(replace(fkvalue));
+    }
+
+    private String replace(String name) {
+
+        if (isRestrictive()) {
+            name = annPattern.matcher(name).replaceAll("ann");
+            name = cntPattern.matcher(name).replaceAll("FK_cnt_");
+            name = grpPattern.matcher(name).replaceAll("group");
+            name = acqPattern.matcher(name).replaceAll("scr_acq");
+        }
+        return name;
+    }
+
+    private String reduce(String name) {
+
+        if (isRestrictive()) {
+            if (name.length() > 30) {
+                String keep = name.substring(0, 27);
+                String reduce = name.substring(28);
+                name = keep + reduce.length();
+            }
+        }
+        return name;
+    }
+
+    private String quote(String name) {
+        return quote(name, VM_QUOTE);
+    }
+
+    private String quote(String name, String quote) {
+        name = quote + name + quote;
+        return name;
     }
 
     /*
@@ -231,11 +389,15 @@ public abstract class SemanticType {
         this.superclass = st;
     }
 
+    public SemanticType getActualSuperClass() {
+        return this.superclass;
+    }
+
     public void setSuperclass(String superclass) {
         if (superclass != null) {
             Properties p = new Properties();
             p.setProperty("id", superclass);
-            this.superclass = new SemanticType(p) {
+            this.superclass = new SemanticType(profile, p) {
             };
         }
     }
@@ -391,28 +553,28 @@ public abstract class SemanticType {
 //
 
 class BaseType extends SemanticType {
-    public BaseType(Properties attrs) {
-        super(attrs);
+    public BaseType(String profile, Properties attrs) {
+        super(profile, attrs);
     }
 }
 
 class AbstractType extends SemanticType {
-    public AbstractType(Properties attrs) {
-        super(attrs);
+    public AbstractType(String profile, Properties attrs) {
+        super(profile, attrs);
         this.setAbstract(Boolean.TRUE);
     }
 }
 
 class ContainerType extends SemanticType {
-    public ContainerType(Properties attrs) {
-        super(attrs);
+    public ContainerType(String profile, Properties attrs) {
+        super(profile, attrs);
         // TODO
     }
 }
 
 class LinkType extends SemanticType {
-    public LinkType(Properties attrs) {
-        super(attrs);
+    public LinkType(String profile, Properties attrs) {
+        super(profile, attrs);
     }
 
     @Override
@@ -422,16 +584,17 @@ class LinkType extends SemanticType {
 }
 
 class ResultType extends SemanticType {
-    public ResultType(Properties attrs) {
-        super(attrs);
+    public ResultType(String profile, Properties attrs) {
+        super(profile, attrs);
         // TODO
     }
 }
 
 class EnumType extends SemanticType {
 
-    public EnumType(Properties attrs) {
-        super(attrs);
+    public EnumType(String profile, Properties attrs) {
+        super(profile, attrs);
+        // Note: not global like in 4.2+
         Properties props = new Properties();
         props.setProperty("name", "value");
         props.setProperty("type", "string");

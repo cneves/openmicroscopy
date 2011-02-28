@@ -9,6 +9,8 @@ package ome.dsl;
 
 // Java imports
 import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -132,6 +134,14 @@ public abstract class Property { // TODO need to define equality so that two
      * The {@link SemanticType} instance which this property points at
      */
     private SemanticType actualType;
+    
+    private final String profile;
+
+    /**
+     * The {@link SemanticType} instance which is the target of this property
+     * (for collections)
+     */
+    private SemanticType actualTarget;
 
     // String based values.
     private String name;
@@ -257,6 +267,14 @@ public abstract class Property { // TODO need to define equality so that two
         return this.actualType;
     }
 
+    public void setActualTarget(SemanticType type) {
+        this.actualTarget = type;
+    }
+
+    public SemanticType getActualTarget() {
+        return this.actualTarget;
+    }
+
     /**
      * Read-only variable
      */
@@ -272,8 +290,14 @@ public abstract class Property { // TODO need to define equality so that two
      * Read-only variable
      */
     public String getTypeAnnotation() {
+        String T = "@org.hibernate.annotations.Type";
+        String P = ", parameters=@org.hibernate.annotations.Parameter(name=\"profile\", value=\"@PROFILE@\"))";
         if (type.equals("text")) {
-            return "@org.hibernate.annotations.Type(type=\"org.hibernate.type.TextType\")";
+            return T + "(type=\"org.hibernate.type.TextType\")";
+        } else if (type.equals("string[]")) {
+            return T + "(type=\"ome.tools.hibernate.ListAsSQLArrayUserType$STRING\"" + P;
+        } else if (type.equals("string[][]")) {
+            return T + "(type=\"ome.tools.hibernate.ListAsSQLArrayUserType$STRING2\"" + P;
         } else {
             return "// No @Type annotation";
         }
@@ -454,6 +478,7 @@ public abstract class Property { // TODO need to define equality so that two
      * VALUES. Subclassees may override these values
      */
     public Property(SemanticType st, Properties attrs) {
+        this.profile = st.profile;
         setSt(st);
         setName(attrs.getProperty("name", null));
         setType(attrs.getProperty("type", null));

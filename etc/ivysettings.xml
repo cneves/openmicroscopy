@@ -13,6 +13,7 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -->
 
+  <properties file="${ivy.settings.dir}/local.properties.example"/>
   <properties file="${ivy.settings.dir}/local.properties"/>
   <settings defaultResolver="${omero.resolver}"/>
   <caches defaultCacheDir="${ivy.settings.dir}/../lib/cache"/>
@@ -29,6 +30,14 @@
         <artifact pattern="${ivy.settings.dir}/../lib/repository/[module]-[revision].[type]" />
         <ivy pattern="${ivy.settings.dir}/../lib/repository/[module]-[revision].ivy"/>
       </filesystem>
+      <url name="com.springsource.repository.bundles.release">
+        <ivy pattern="http://repository.springsource.com/ivy/bundles/release/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
+        <artifact pattern="http://repository.springsource.com/ivy/bundles/release/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
+      </url>
+      <url name="com.springsource.repository.bundles.external">
+        <ivy pattern="http://repository.springsource.com/ivy/bundles/external/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
+        <artifact pattern="http://repository.springsource.com/ivy/bundles/external/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
+      </url>
    </chain>
 
    <!-- Optional resolver which can be modified for using non-SCM jars -->

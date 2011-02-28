@@ -9,6 +9,7 @@ package ome.server.itests.update;
 import ome.model.core.Channel;
 import ome.model.core.Pixels;
 import ome.model.core.PlaneInfo;
+import ome.parameters.Parameters;
 import ome.testing.ObjectFactory;
 
 import org.testng.annotations.Test;
@@ -39,24 +40,6 @@ public class DetachedPixelsGraphTest extends AbstractUpdateTest {
         assertTrue("Starting off empty", p.sizeOfChannels() >= 0);
         channelsSizeBefore = p.sizeOfChannels();
         assertTrue("Starting off empty", channelsSizeBefore > 0);
-
-    }
-
-    @Test
-    public void testNewRecursiveEntityFieldOnDetachedPixels() throws Exception {
-        // PREPARE ----------------------------------------------
-        p.setRelatedTo(ObjectFactory.createPixelGraph(null));
-        p = iUpdate.saveAndReturnObject(p.getImage()).getPixels(0);
-
-        // TEST -------------------------------------------------
-        assertTrue("Related-to is null", p.getRelatedTo() != null);
-        assertTrue("or it has no id", p.getRelatedTo().getId().longValue() > 0);
-
-        long id = this.jdbcTemplate.queryForLong(
-                "select relatedto from pixels where id = ?", new Object[] { p
-                        .getId() });
-        assertTrue("Id *really* has to be there.", p.getRelatedTo().getId()
-                .longValue() == id);
 
     }
 

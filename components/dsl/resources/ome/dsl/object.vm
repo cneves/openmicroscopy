@@ -9,6 +9,8 @@
 #set($gfilter = "${type.table}_group_filter")
 #set($efilter = "${type.table}_event_filter")
 #set($pfilter = "${type.table}_perms_filter")
+
+## See #1679, #2142 and various others
 #set($cascadeEjb = "javax.persistence.CascadeType.MERGE,")
 #set($cascadeEjb = "$cascadeEjb javax.persistence.CascadeType.PERSIST,")
 #set($cascadeEjb = "$cascadeEjb javax.persistence.CascadeType.REFRESH")
@@ -87,15 +89,17 @@ import ome.model.*;
 #set($superId = ${type.typeToColumn($type.superclass)} )
 #if(!$type.discriminator)
 @javax.persistence.PrimaryKeyJoinColumn(name="${superId}_id")
-@javax.persistence.Table(name = "${type.table}")
-@org.hibernate.annotations.ForeignKey(name="FK${type.table}_${superId}_id_${superId}")
+@javax.persistence.Table(name = "${type.tableName()}")
+#set($fkvalue = "FK${type.table}_${superId}_id_${superId}")
+#set($fkvalue = "${type.fk($fkvalue)}")
+@org.hibernate.annotations.ForeignKey(name="${fkvalue}")
 #else
 ## SINGLETABLE SUBCLASS
 @javax.persistence.DiscriminatorValue("${type.discriminator}")
 #end
 #else##########################################################
 ## TOP OF HIERARCHY
-@javax.persistence.Table(name = "${type.table}", uniqueConstraints = {
+@javax.persistence.Table(name = "${type.tableName()}", uniqueConstraints = {
 #set( $comma = "0" )
 #foreach($cols in $type.uniqueConstraints)
 #if( $comma == ""  )#set( $comma = ",")#end
@@ -120,12 +124,14 @@ import ome.model.*;
         strategy = "ome.util.TableIdGenerator",
         parameters = {
             @org.hibernate.annotations.Parameter(name = "table_name", value = "seq_table"),
-            @org.hibernate.annotations.Parameter(name = "segment_value", value = "seq_${type.table}"),
+            @org.hibernate.annotations.Parameter(name = "segment_value", value = "seq_${type.sequenceName}"),
             @org.hibernate.annotations.Parameter(name = "optimizer", value = "pooled"),
             @org.hibernate.annotations.Parameter(name = "increment_size", value = "50")
         })
 #end############################################################
+#if(!$type.abstract)
 @org.hibernate.search.annotations.Indexed(index="FullText")
+#end
 @org.hibernate.search.annotations.ClassBridge(
     name="details",
     impl = ome.util.DetailsFieldBridge.class,
@@ -313,7 +319,9 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
 #set( $other = "parent" )
 #set( $cascadeHibCollection = "org.hibernate.annotations.CascadeType.ALL, org.hibernate.annotations.CascadeType.DELETE_ORPHAN" )
 #end
-#end##isLink
+#elseif($prop.ordered)
+#set( $cascadeHibCollection = "org.hibernate.annotations.CascadeType.ALL, org.hibernate.annotations.CascadeType.DELETE_ORPHAN" )
+#end
 ##
     protected ${prop.fieldType} ${prop.name} = ${prop.fieldInitializer};
 
@@ -394,7 +402,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
     * one-to-many List ${type.id}.${prop.name} (${prop.type})
     * Values are indexed by the column "index" on ${prop.type}
     */
-    @javax.persistence.JoinColumn(name="${prop.inverse}", nullable=false)
+    @javax.persistence.JoinColumn(name="${type.inverse($prop)}", nullable=false)
     @javax.persistence.OneToMany(fetch=javax.persistence.FetchType.LAZY, cascade={${cascadeEjb}})
     @org.hibernate.annotations.IndexColumn(name="${prop.inverse}_index", nullable=false)
 #else
@@ -510,15 +518,20 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
             throwNullCollectionException("${prop.nameCapped}");
         }
         get${prop.nameCapped}().add( target );
-        // If this relationship is not ordered, then we will 
+
+## Copied to add${prop.shortType}Set(elements)
+## Copied to set${prop.shortType}(index, element)
+        // If this relationship is not ordered, then we will
         // "attempt" the setting even if it is loaded.
+        if (target != null) {
 #if(${prop.ordered})
-        if (target.isLoaded()) {
+            if (target.isLoaded()) {
 #end
-            target.set${prop.inverseCapped} ( this );
+                target.set${prop.inverseCapped} ( this );
 #if(${prop.ordered})
-       }
+             }
 #end
+         }
     }
 
     /**
@@ -533,15 +546,19 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         java.util.Iterator<${prop.type}> it = targets.iterator();
         while ( it.hasNext() ) {
             ${prop.type} target = it.next();
-            // If this relationship is not ordered, then we will 
+
+## Copied from add${prop.shortType}(target)
+            // If this relationship is not ordered, then we will
             // "attempt" the setting even if it is loaded.
+            if (target != null) {
 #if(${prop.ordered})
-            if (target.isLoaded()) {
+                if (target.isLoaded()) {
 #end
-                target.set${prop.inverseCapped} ( this );
+                    target.set${prop.inverseCapped} ( this );
 #if(${prop.ordered})
+                }
+#end
             }
-#end
         }
     }
 
@@ -630,13 +647,29 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
      * contract. To extend the list, use {@link #add${prop.shortType}()}.
      * @see java.util.List\#set(int, E)
      */
-    public void set${prop.shortType}(int index, ${prop.type} element) 
+    public ${prop.type} set${prop.shortType}(int index, ${prop.type} element)
     throws IndexOutOfBoundsException {
         $errorIfUnloaded
         if (get${prop.nameCapped}() == null) {
             throwNullCollectionException("${prop.nameCapped}");
         }
-        get${prop.nameCapped}().set(index, element);
+
+        ${prop.type} old = get${prop.nameCapped}().set(index, element);
+
+## Copied from add${prop.shortType}
+        // If this relationship is not ordered, then we will
+        // "attempt" the setting even if it is loaded.
+        if (element != null) {
+#if(${prop.ordered})
+            if (element.isLoaded()) {
+#end
+                element.set${prop.inverseCapped} ( this );
+#if(${prop.ordered})
+            }
+#end
+        }
+
+        return old;
     }
 
     /**
@@ -655,7 +688,6 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         }
         return get${prop.nameCapped}().get(0);
     }
-    
 
     /**
      * Swaps the first element of ${prop.name} with the first instance of the 
@@ -866,28 +898,35 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         }
     }
 
+#if(!$prop.actualTarget.global)
     private java.util.Map<Long, Long> ${prop.name}CountPerOwner = null;
 
     protected void set${prop.nameCapped}CountPerOwner(java.util.Map<Long, Long> map) {
         this.${prop.name}CountPerOwner = map;
     }
 
+    /* DISABLED:
+    @org.hibernate.annotations.CollectionOfElements()
+    @org.hibernate.annotations.MapKey(columns=@javax.persistence.Column(name="owner_id"))
+    @javax.persistence.JoinTable(name="count_${type.shortname}_${prop.name}_by_owner")
+    */
     /**
      * If fetched, returns the count(*) of ${LinkType} that a user has.
      * If unfetched, returns null. No entries in the collection should be null.
      */
-    // Prevents deletes
-    @org.hibernate.annotations.Persister(impl = ome.util.CountCollectionPersister.class)
-    @javax.persistence.JoinTable(
-        name="count_${type.shortname}_${prop.name}_by_owner"
-    )
-    @javax.persistence.Column(name="count", nullable=false)
-    @org.hibernate.annotations.ForeignKey(name="FK_count_to_${type.shortname}_${prop.name}")
-    @org.hibernate.annotations.CollectionOfElements()
-    @org.hibernate.annotations.MapKey(columns=@javax.persistence.Column(name="owner_id"))
+    @org.hibernate.annotations.Persister(impl = ome.util.CountCollectionPersister.class) // prevents deletes
+#set($fkvalue = "FK_count_to_${type.shortname}_${prop.name}")
+#set($fkvalue = "${type.fk($fkvalue)}")
+    @org.hibernate.annotations.ForeignKey(name="${fkvalue}") // for code-gen
+    @javax.persistence.ElementCollection // new collection annotation
+    @javax.persistence.MapKeyColumn(name="owner_id", insertable=false, updatable=false, nullable=false)
+    @javax.persistence.Column(name="\"count\"", insertable=false, updatable=false, nullable=false)
+    @javax.persistence.CollectionTable(name="${type.countName($prop)}",
+        joinColumns = @javax.persistence.JoinColumn(name="${type.shortname}_id"))
     public java.util.Map<Long, Long> get${prop.nameCapped}CountPerOwner() {
         return this.${prop.name}CountPerOwner;
     }
+#end
 
 #end## End isLink
 #elseif($prop.foreignKey)## REGULAR M-1 ##################################TYPE
@@ -900,9 +939,11 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
     */
     @javax.persistence.ManyToOne(fetch = javax.persistence.FetchType.${fetchType}, cascade = {${cascadeEjb}}, targetEntity = ${prop.type}.class)
     @org.hibernate.annotations.Cascade({${cascadeHib}})
-    @javax.persistence.JoinColumn(name="${prop.name}", nullable=${prop.nullable},
+    @javax.persistence.JoinColumn(name="${type.propName($prop)}", nullable=${prop.nullable},
         unique=${prop.unique}, insertable=${prop.insert}, updatable=${prop.update})
-    @org.hibernate.annotations.ForeignKey(name="FK${type.shortname.toLowerCase()}_${prop.name}_${prop.shortType.toLowerCase()}")
+#set($fkvalue = "FK${type.shortname.toLowerCase()}_${prop.name}_${prop.shortType.toLowerCase()}")
+#set($fkvalue = "${type.fk($fkvalue)}")
+    @org.hibernate.annotations.ForeignKey(name="${fkvalue}")
 #if($type.isLink)## Need to convert from IObject to an implementation class
     @org.hibernate.annotations.Target(${prop.type}.class)
 #end
@@ -919,7 +960,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
    /**
     * Simple field ${type.id}.${prop.name} (${prop.type}) 
     */
-    ${prop.typeAnnotation}
+    ${type.typeAnnotation($prop)}
 #if($prop.type == "java.lang.String")
     @org.hibernate.search.annotations.Fields({
         @org.hibernate.search.annotations.Field(index = org.hibernate.search.annotations.Index.TOKENIZED),
@@ -937,11 +978,8 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
 #else
     // Not indexed
 #end
-#set($columnName="${prop.name}")
-#if($prop.name.equals("column"))
-#set($columnName="\"column\"")
-#end
-    @javax.persistence.Column(columnDefinition="${prop.def}", nullable=${prop.nullable}, unique=${prop.unique}, name="${columnName}", updatable=${prop.update})
+
+    @javax.persistence.Column(columnDefinition="${prop.def}", nullable=${prop.nullable}, unique=${prop.unique}, name="${type.columnName($prop)}", updatable=${prop.update})
     public ${prop.fieldType} get${prop.nameCapped}() {
         $errorIfUnloaded
         return this.${prop.name};
@@ -990,7 +1028,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
             this.version = (Integer) __filter.filter(VERSION, this.version);
 #end
 #foreach($prop in $type.classProperties)
-#if($prop.one2Many && $prop.isLink)
+#if($prop.one2Many && $prop.isLink && !$prop.actualTarget.global)
             this.${prop.name}CountPerOwner = (java.util.Map<Long, Long>) __filter.filter(${prop.name.toUpperCase()}COUNTPEROWNER, this.${prop.name}CountPerOwner );
 #end
             this.${prop.name} = (${prop.fieldType}) __filter.filter(${prop.name.toUpperCase()}, this.${prop.name} );
@@ -1033,7 +1071,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
     }
   
 #foreach($prop in $type.classProperties)
-#if($prop.one2Many && $prop.isLink)
+#if($prop.one2Many && $prop.isLink && !$prop.actualTarget.global)
     public final static String ${prop.name.toUpperCase()}COUNTPEROWNER = "${type.id}_${prop.name}CountPerOwner";
 #end
     public final static String ${prop.nameUpper} = "${type.id}_${prop.name}";
@@ -1049,7 +1087,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
        raw.add(VERSION);
 #end
 #foreach($prop in $type.classProperties)
-#if($prop.one2Many && $prop.isLink)
+#if($prop.one2Many && $prop.isLink && !$prop.actualTarget.global)
        raw.add(${prop.name.toUpperCase()}COUNTPEROWNER);
 #end
        raw.add(${prop.nameUpper});
@@ -1080,7 +1118,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
              return getVersion();
 #end
 #foreach($prop in $type.classProperties)
-#if($prop.one2Many && $prop.isLink)
+#if($prop.one2Many && $prop.isLink && !$prop.actualTarget.global)
         } else if (field.equals(${prop.name.toUpperCase()}COUNTPEROWNER)) {
             return get${prop.nameCapped}CountPerOwner();
 #end
@@ -1113,7 +1151,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
              setVersion((Integer) value);
 #end
 #foreach($prop in $type.classProperties)
-#if($prop.one2Many && $prop.isLink)
+#if($prop.one2Many && $prop.isLink && !$prop.actualTarget.global)
         } else if (field.equals(${prop.name.toUpperCase()}COUNTPEROWNER)) {
             set${prop.nameCapped}CountPerOwner((java.util.Map<Long,Long>)value);
 #end
@@ -1153,7 +1191,7 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         this.version = null;
 #end
 #foreach($prop in $type.classProperties)
-#if($prop.one2Many && $prop.isLink)
+#if($prop.one2Many && $prop.isLink && !$prop.actualTarget.global)
         this.${prop.name}CountPerOwner = null;
 #end
         this.${prop.name} = null;
@@ -1242,7 +1280,9 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         @javax.persistence.ManyToOne(fetch = javax.persistence.FetchType.LAZY, cascade = {${cascadeEjb}})
         @org.hibernate.annotations.Cascade({${cascadeHib}})
         @javax.persistence.JoinColumn(name = "external_id", nullable = true, unique = true, insertable = true, updatable = false)
-        @org.hibernate.annotations.ForeignKey(name = "FK${type.table}_external_id_externalinfo")
+#set($fkvalue = "FK${type.table}_external_id_externalinfo")
+#set($fkvalue = "${type.fk($fkvalue)}")
+        @org.hibernate.annotations.ForeignKey(name = "${fkvalue}")
         public ome.model.meta.ExternalInfo getExternalInfo() {
             return super.getExternalInfo();
         }
@@ -1252,7 +1292,9 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         @javax.persistence.ManyToOne(fetch = javax.persistence.FetchType.LAZY, cascade = {${cascadeEjb}})
         @org.hibernate.annotations.Cascade({${cascadeHib}})
         @javax.persistence.JoinColumn(name = "owner_id", nullable = false, unique = false, insertable = true, updatable = true)
-        @org.hibernate.annotations.ForeignKey(name = "FK${type.table}_owner_id_experimenter")
+#set($fkvalue = "FK${type.table}_owner_id_experimenter")
+#set($fkvalue = "${type.fk($fkvalue)}")
+        @org.hibernate.annotations.ForeignKey(name = "${fkvalue}")
         public ome.model.meta.Experimenter getOwner() {
             return super.getOwner();
         }
@@ -1261,7 +1303,9 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         @javax.persistence.ManyToOne(fetch = javax.persistence.FetchType.LAZY, cascade = {${cascadeEjb}})
         @org.hibernate.annotations.Cascade({${cascadeHib}})
         @javax.persistence.JoinColumn(name = "creation_id", nullable = false, unique = false, insertable = true, updatable = false)
-        @org.hibernate.annotations.ForeignKey(name = "FK${type.table}_creation_id_event")
+#set($fkvalue = "FK${type.table}_creation_id_event")
+#set($fkvalue = "${type.fk($fkvalue)}")
+        @org.hibernate.annotations.ForeignKey(name = "${fkvalue}")
         public ome.model.meta.Event getCreationEvent() {
             return super.getCreationEvent();
         }
@@ -1270,7 +1314,9 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         @javax.persistence.ManyToOne(fetch = javax.persistence.FetchType.LAZY, cascade = {${cascadeEjb}})
         @org.hibernate.annotations.Cascade({${cascadeHib}})
         @javax.persistence.JoinColumn(name = "group_id", nullable = false, unique = false, insertable = true, updatable = true)
-        @org.hibernate.annotations.ForeignKey(name = "FK${type.table}_group_id_experimentergroup")
+#set($fkvalue = "FK${type.table}_group_id_experimentergroup")
+#set($fkvalue = "${type.fk($fkvalue)}")
+        @org.hibernate.annotations.ForeignKey(name = "${fkvalue}")
         public ome.model.meta.ExperimenterGroup getGroup() {
             return super.getGroup();
         }
@@ -1280,7 +1326,9 @@ implements java.io.Serializable, IObject#if($type.global), IGlobal#end#if(!$type
         @javax.persistence.ManyToOne(fetch = javax.persistence.FetchType.LAZY, cascade = {${cascadeEjb}})
         @org.hibernate.annotations.Cascade({${cascadeHib}})
         @javax.persistence.JoinColumn(name = "update_id", nullable = false, unique = false, insertable = true, updatable = true)
-        @org.hibernate.annotations.ForeignKey(name = "FK${type.table}_update_id_event")
+#set($fkvalue = "FK${type.table}_update_id_event")
+#set($fkvalue = "${type.fk($fkvalue)}")
+        @org.hibernate.annotations.ForeignKey(name = "${fkvalue}")
         public ome.model.meta.Event getUpdateEvent() {
             return super.getUpdateEvent();
         }

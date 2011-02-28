@@ -133,6 +133,12 @@ java component.
         <prepareDist/>
     </target>
 
+    <target name="build-dev" description="build-default, then test-compile and build-eclipse"
+        depends="clean,init,build-default,test-compile,build-eclipse"/>
+
+    <target name="build-all-dev" description="build-all, then test-compile and build-eclipse"
+        depends="clean,init,build-default,test-compile,build-eclipse"/>
+
     <target name="build-blitz" description="Build blitz and copy to dist/blitz" depends="init">
         <iterate buildpathref="blitzserver.buildpath" target="dist"/>
         <!-- Must also build python since it provides our command lines -->
@@ -173,6 +179,7 @@ java component.
     </target>
 
     <target name="build-schema" description="Build new DB schema and copy to sql/" depends="init">
+        <iterate buildpathref="dsl.buildpath" target="clean"/>
         <iterate buildpathref="model.buildpath" target="clean"/>
         <iterate buildpathref="dsl.buildpath" target="install"/>
         <iterate buildpathref="model.buildpath" target="install"/>
@@ -196,10 +203,11 @@ java component.
 
     <macrodef name="launchSuite">
         <attribute name="suite"/>
+        <attribute name="excludes" default="**/tools/build.xml"/>
         <sequential>
         <ivy:settings id="ivy.@{suite}"  file="${etc.dir}/ivysettings.xml"/>
         <ivy:buildlist reference="@{suite}.buildpath" settingsRef="ivy.@{suite}" ivyfilepath="test.xml">
-            <fileset dir="${omero.home}/components" includes="**/build.xml" excludes="**/tools/build.xml"/>
+            <fileset dir="${omero.home}/components" includes="**/build.xml" excludes="**/insight/**/*,**/specification/**/*,@{excludes}"/>
         </ivy:buildlist>
         <iterate buildpathref="@{suite}.buildpath" target="@{suite}"/>
         </sequential>
@@ -274,8 +282,9 @@ java component.
 
     <target name="release-jdepend" description="Generates jdepend.xml for all components" depends="init">
        <path id="omero.classpath">
-           <fileset dir="${omero.home}/lib/repository" />
+           <fileset dir="${omero.home}/lib/repository"/>
        </path>
+
        <jdepend outputfile="target/jdepend.txt" fork="yes" classpathref="omero.classpath">
            <exclude name="java.*"/>
            <exclude name="java.lang.*"/>

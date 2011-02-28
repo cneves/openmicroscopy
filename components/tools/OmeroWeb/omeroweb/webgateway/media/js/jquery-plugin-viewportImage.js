@@ -30,13 +30,17 @@ $.fn.viewportImage = function(options) {
     var dragdiv = jQuery('#'+insideId);
     var dragdiv_dom = dragdiv.get(0);
     var wrapdiv = jQuery(dragdiv_dom.parentNode);
-    var overlay =   $('<img id="'+insideId+'-ovl">').appendTo(dragdiv);
+    var overlay = $('<img id="'+insideId+'-ovl">').appendTo(dragdiv);
     overlay.addClass('weblitz-viewport-img').hide();
-
+    
+    $('<div id="weblitz-viewport-tiles"><div class="well"><!-- --></div><div class="surface"><!-- --></div></div>').appendTo(wrapdiv);
+    var tilecontainer = jQuery('#weblitz-viewport-tiles');
+    var viewerBean = null;
+    
     var panbars = options == null || options.panbars;
     var mediaroot = options == null ? null : options.mediaroot;
     mediaroot = mediaroot || '/appmedia';
-
+    
     if (panbars) { 
     /* Panning sides */
     var panleftId = this.id + '-panl';
@@ -257,7 +261,10 @@ $.fn.viewportImage = function(options) {
       } else {
         dragdiv.css({left: left, top: top});
       }
+            
     }
+    
+    
 
     var cur_zoom = 100;
     var orig_width;
@@ -279,6 +286,13 @@ $.fn.viewportImage = function(options) {
     this.setYOffset = function (yoffset) {dragdiv.css('top', -yoffset); this.doMove(0,0);};
 
     this.setZoom = function (val, width, height) {
+        if (viewerBean != null) {            
+            if (val!=cur_zoom) {
+              viewerBean.zoom(val < cur_zoom ? -1 : 1);
+        	  //viewerBean.recenter({'x':400 ,'y':800}, true);
+        	 }
+        }
+          
       if (width != null && height != null) {
         orig_width = width;
         orig_height = height;
@@ -295,9 +309,11 @@ $.fn.viewportImage = function(options) {
           changing = null;
 			      }, 20);
       }
+      image.trigger("instant_zoom", [cur_zoom])
       image.attr({width: width, height: height});
       overlay.attr({width: width, height: height});
-     }
+            
+     }     
 
     this.setZoomToFit = function (only_shrink, width, height) {
       if (width != null && height != null) {
@@ -305,7 +321,11 @@ $.fn.viewportImage = function(options) {
         orig_height = height;
         cur_zoom = 100;
       }
-      var ztf = Math.min(wrapwidth * 100.0 / orig_width, wrapheight * 100.0 / orig_height);
+      if (viewerBean == null) {
+          var ztf = Math.min(wrapwidth * 100.0 / orig_width, wrapheight * 100.0 / orig_height);
+      } else {
+          var ztf = 100;
+      }
       if (only_shrink && ztf >= 100.0) {
         ztf = 100.0;
       }
@@ -333,7 +353,6 @@ $.fn.viewportImage = function(options) {
       
       e.preventDefault();
     })
-  
   
     /**
      * Handle Zoom by mousewheel (FF)
@@ -403,17 +422,52 @@ $.fn.viewportImage = function(options) {
       }
     });
 
-    /**
-     * Make sure the image is correctly located inside the div and assert context variables are sync'd
-     */
-
+    
+    function initializeGraphic(e) {
+        // opera triggers the onload twice
+    	if (viewerBean == null) {
+    		viewerBean = new PanoJS('weblitz-viewport-tiles', {
+    			tileBaseUri: tile_url,
+    			tileSizeX: X_TILE_SIZE,
+    			tileSizeY: Y_TILE_SIZE,
+    			maxZoom: TILE_MAX_ZOOM,
+    			initialZoom: TILE_MAX_ZOOM,
+    			blankTile: '/appmedia/webgateway/img/panojs/blank.gif',
+    			//loadingTile: '/appmedia/webgateway/img/panojs/spinner.gif'
+    		});
+    		//viewerBean.fitToWindow(0);
+    		viewerBean.init();
+    		//viewerBean.recenter({'x':400 ,'y':800}, true);
+    	}
+    }
+    
+    
+    this.setUpTiles = function (xtilesize,ytilesize, max_zoom, href) {
+        
+        X_TILE_SIZE = xtilesize;
+        Y_TILE_SIZE = ytilesize;
+        tile_url = href;
+        TILE_MAX_ZOOM = max_zoom;
+        tilecontainer.css({width: wrapwidth, height: wrapheight});
+        initializeGraphic();
+        
+    }
+    
+    
     this.refresh = function () {
+        
       imagewidth = image.width();
       imageheight = image.height();
       wrapwidth = wrapdiv.width();
       wrapheight = wrapdiv.height();
       //orig_width = image.get(0).clientWidth;
-      //orig_height = image.get(0).clientHeight;
+      //orig_height = image.get(0).clientHeight;   
+         
+      if (viewerBean != null) {
+          tilecontainer.css({width: wrapwidth, height: wrapheight});
+          viewerBean.resize();
+      }
+      
       if (panbars) {
       pantop.center();
       panbottom.center();
@@ -426,3 +480,4 @@ $.fn.viewportImage = function(options) {
     //jQuery(window).resize(this.refresh);
   });
 }
+

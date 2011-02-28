@@ -77,11 +77,14 @@ opts.Add(BoolVariable('run_py', 'Execute Python build artifacts', 0))
 map = { "options" : opts,
         "CPPPATH" : cpppath + [os.path.join(builddir,"include"), os.path.curdir],
         "LIBPATH" : libpath + [os.path.join(builddir,"lib")],
-        "PYTHONPATH" : pypath + [os.path.join(builddir,"lib","python")],
         "CXXFLAGS" : [],
         "CPPDEFINES" : [],
         "LINKFLAGS" : [],
-        "JAVACFLAGS" : []}
+        "JAVACFLAGS" : [],
+        "ENV" : {
+            "ICE_CONFIG" : ice_config,
+            "PATH": os.environ["PATH"],
+            "PYTHONPATH" : os.pathsep.join(pypath + [os.path.join(builddir,"lib","python")]) }}
 
 if platform.name == "darwin":
     map["CPPPATH"].append( '/opt/local/include/' )
@@ -93,19 +96,17 @@ if platform.name == "posix" or platform.name == "linux" or platform.name == "dar
     map["LIBPATH"].append('/opt/local/lib')
     map["LIBPATH"].append(os.path.join(builddir, 'lib'))
     #
-    map["ENV"] = {
-        "ICE_CONFIG" : ice_config,
-        "PATH": os.environ["PATH"],
-        "PYTHONPATH": map["PYTHONPATH"],
+    map["ENV"].update({
         "LD_LIBRARY_PATH": map["LIBPATH"],
         "DYLD_LIBRARY_PATH": map["LIBPATH"],
-    }
+    })
 
     if mode == "debug":
         map["CXXFLAGS"] = ["-g","-O0"]
 
 # Windows
 else:
+
     if mode == "debug":
         map["CXXFLAGS"]   = ['-W1', '-GX', '-EHsc', '-D_DEBUG', '/MDd', '/Zi']
         map["LIBPATH"]    = ["bin/windows/debug"]
@@ -129,26 +130,30 @@ if os.environ.has_key("ICE_HOME"):
 # env.Decider('MD5-timestamp')
 
 # CONFIGURATION: ==============================================
-#
-# Check C++ libraries
-#
-conf = Configure(env)
-if not conf.CheckCXXHeader('Ice/Ice.h'):
-    print 'Ice must be installed!'
-    Exit(1)
 
-if platform.name == "posix" or platform.name == "linux":
-    if not conf.CheckLib('Ice'):
-        print 'Ice library must be in path'
+if not env["no_cpp"]:
+    #
+    # Check C++ libraries
+    #
+    conf = Configure(env)
+    if not conf.CheckCXXHeader('Ice/Ice.h'):
+        print 'Ice must be installed!'
         Exit(1)
 
-#
-# Use C++ libraries
-#
-if platform.name == "posix" or platform.name == "linux" or platform.name == "darwin":
-    libs = Split("Ice IceUtil Glacier2")+link
+    if platform.name == "posix" or platform.name == "linux":
+        if not conf.CheckLib('Ice'):
+            print 'Ice library must be in path'
+            Exit(1)
+
+    #
+    # Use C++ libraries
+    #
+    if platform.name == "posix" or platform.name == "linux" or platform.name == "darwin":
+        libs = Split("Ice IceUtil Glacier2")+link
+    else:
+        libs = Split("Ice.lib")
 else:
-    libs = Split("Ice.lib")
+    libs = [] # Placeholder for no_cpp builds
 
 
 # TARGETS / EXECUTION: ==========================================

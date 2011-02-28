@@ -123,7 +123,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
   this.viewport = jQuery('#'+viewportid);
   this.viewport.append('<img id="'+viewportimgid+'">');
   this.viewportimg = jQuery('#'+viewportimgid);
-  this.viewport.append('<div id="'+viewportmsgid+'" class="weblitz-viewport-msg"></div>');
+  this.viewport.append('<div id="'+viewportmsgid+'" class="weblitz-viewport-msg"></div>');  
   this.viewportmsg = jQuery('#'+viewportmsgid);
   this.self.append('<div id="'+bottomid+'" class="weblitz-viewport-bot">');
   this.bottom = jQuery('#'+bottomid);
@@ -134,7 +134,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
     return _this.viewportmsg.is(':hidden');
   };
 
-  this.viewportimg.viewportImage(options);
+  this.viewportimg.viewportImage(options);  
   this.viewportimg.bind('zoom', function (e,z) { _this.loadedImg.current.zoom = z; });
   this.zslider.gs_slider({ orientation: 'v', min:0, max:0, tooltip_prefix: 'Z=', repeatCallback: done_reload });
   this.tslider.gs_slider({ tooltip_prefix: 'T=', min:0, max:0, repeatCallback: done_reload });
@@ -155,10 +155,33 @@ jQuery._WeblitzViewport = function (container, server, options) {
       }
         _load();
      });
+     
+  
+  // Sets the Z position (1-based index) of the image viewer by delegating to the slider. 
+  // Setting the slider should also result in the image plane changing. 
+  this.setZPos = function(pos) {
+      if (this.getZPos() != pos) {  // don't reload etc if we don't have to
+          if (_this.loadedImg.rdefs.invertAxis) {
+              this.tslider.get(0).setSliderPos(pos);
+          } else {
+              this.zslider.get(0).setSliderPos(pos);
+          }
+      }
+  };
+  this.setTPos = function(pos) {
+      if (this.getTPos() != pos) {
+          if (_this.loadedImg.rdefs.invertAxis) {
+              this.zslider.get(0).setSliderPos(pos);
+          } else {
+              this.tslider.get(0).setSliderPos(pos);
+          }
+      }
+  }
 
   var after_img_load_cb = function (callback) {
     hideLoading();
     _this.viewportimg.show();
+    
     _this.zslider.get(0).pos = -1;
     if (_this.loadedImg.rdefs.projection.toLowerCase().substring(3,0) == 'int') {
 	_this.zslider.get(0).setSliderRange(1, 1, _this.getPos().z+1, false);
@@ -171,7 +194,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
     }
     if (_this.hasLinePlot()) {
       _this.viewportimg.one('zoom', function () {_this.refreshPlot();});
-    }
+    }    
   }
   
   /**
@@ -219,19 +242,28 @@ jQuery._WeblitzViewport = function (container, server, options) {
   var _load = function (callback) {
     if (_this.loadedImg._loaded) {
       var href;
-      if (_this.loadedImg.rdefs.projection.toLowerCase() != 'split') {
+      if (_this.loadedImg.tiles) {
+        href = server + '/render_image_region/' + _this.getRelUrl();
+      } else if (_this.loadedImg.rdefs.projection.toLowerCase() != 'split') {
         href = server + '/render_image/' + _this.getRelUrl();
       } else {
         href = server + '/render_split_channel/' + _this.getRelUrl();
       }
+      
       var rcb = function () {
         after_img_load_cb(callback);
         _this.viewportimg.unbind('load', rcb);
         _this.self.trigger('imageChange', [_this]);
       };
+      
       showLoading();
-      _this.viewportimg.load(rcb);
-      _this.viewportimg.attr('src', href);
+      if (_this.loadedImg.tiles) {
+          rcb()
+          _this.viewportimg.get(0).setUpTiles(_this.loadedImg.tile_size.width, _this.loadedImg.tile_size.height, _this.loadedImg.max_zoom, href);
+      } else {
+          _this.viewportimg.load(rcb);
+          _this.viewportimg.attr('src', href);
+      }      
     }
   }
 

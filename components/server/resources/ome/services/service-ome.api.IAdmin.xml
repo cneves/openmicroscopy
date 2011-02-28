@@ -26,8 +26,8 @@
     Privileged bean which has several "private" references injected. This is not
     an example of what should be done.
     </description>
-    <constructor-arg ref="simpleJdbcTemplate"/>
-    <constructor-arg ref="sessionFactory"/>
+    <constructor-arg ref="simpleSqlAction"/>
+    <constructor-arg ref="omeroSessionFactory"/>
     <constructor-arg ref="mailSender"/>
     <constructor-arg ref="templateMessage"/>
     <constructor-arg ref="aclVoter"/>
@@ -42,11 +42,11 @@
       <list>
         <bean class="ome.security.auth.LdapPasswordProvider">
           <constructor-arg ref="internal-ome.api.LocalLdap"/>
-          <constructor-arg ref="simpleJdbcTemplate"/>
+          <constructor-arg ref="simpleSqlAction"/>
           <constructor-arg value="true"/>
         </bean>
         <bean class="ome.security.auth.JdbcPasswordProvider">
-          <constructor-arg ref="simpleJdbcTemplate"/>
+          <constructor-arg ref="simpleSqlAction"/>
         </bean>        
       </list>
     </constructor-arg>
