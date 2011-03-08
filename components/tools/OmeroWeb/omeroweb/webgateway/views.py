@@ -597,8 +597,11 @@ def render_image_region(request, iid, z, t, server_id=None, _conn=None, **kwargs
         raise Http404
     img, compress_quality = pi
     
-    tilesizex = 187
-    tilesizey = 140
+    import math
+    max_zoom = math.ceil(math.log(max(img.getWidth(), img.getHeight()),2))-1
+    tilesizex = math.ceil(img.getWidth()/max_zoom)
+    tilesizey = math.ceil(img.getHeight()/max_zoom)
+
     region = request.REQUEST.get('region', None)
     if region:
         try:
@@ -1018,12 +1021,22 @@ def imageMarshal (image, key=None):
     image.loadRenderOptions()
     pr = image.getProject()
     ds = image.getDataset()
+    
+    #big images
+    tiles = (max(image.getWidth(), image.getHeight()) > 1024) and True or False
+    import math
+    max_zoom = tiles and math.ceil(math.log(max(image.getWidth(), image.getHeight()),2))-1 or None
+    width = tiles and math.ceil(image.getWidth()/max_zoom) or None
+    height = tiles and math.ceil(image.getHeight()/max_zoom) or None
+    init_zoom = tiles and max(math.ceil(math.log(image.getWidth()/width)), math.ceil(math.log(image.getHeight()/height))) or None
+    max_zoom = tiles and max(math.ceil(math.log(image.getWidth()/width)), math.ceil(math.log(image.getHeight()/height))) or None
     try:
         rv = {
-            'tiles': False, #BIG IMAGE -> True
-            'tile_size': {'width': 187,
-                          'height': 140},
-            'max_zoom': 4,
+            'tiles': tiles,
+            'tile_size': {'width': width,
+                          'height': height},
+            'init_zoom': init_zoom,
+            'max_zoom': max_zoom,
             'id': image.id,
             'size': {'width': image.getWidth(),
                      'height': image.getHeight(),

@@ -2097,7 +2097,7 @@ class _BlitzGateway (object):
     
     def getExperimenters(self, ids=None):
         """ 
-        Get experimenters for the given user ids. If ID is not set, return current user.
+        Get experimenters for the given user ids. If ID is not set, return all apart from current user.
         TODO: omero.gateway.BlitzGateway has getExperimenter(id) method
         
         @param ids:     List of experimenter IDs
@@ -2282,128 +2282,6 @@ class _BlitzGateway (object):
         rep_serv = self.getRepositoryInfoService()
         return rep_serv.getFreeSpaceInKilobytes() * 1024
     
-    ##############################################
-    ##   IShare
-    
-    def getOwnShares(self):
-        """
-        Gets all owned shares for the current user.
-        
-        @return:    Shares that user owns
-        @rtype:     L{ShareWrapper} generator
-        """
-        
-        sh = self.getShareService()
-        for e in sh.getOwnShares(False):
-            yield ShareWrapper(self, e)
-    
-    def getMemberShares(self):
-        """
-        Gets all shares where current user is a member.
-        
-        @return:    Shares that user is a member of
-        @rtype:     L{ShareWrapper} generator
-        """
-        
-        sh = self.getShareService()
-        for e in sh.getMemberShares(False):
-            yield ShareWrapper(self, e)
-    
-    def getMemberCount(self, share_ids):
-        """
-        Returns a map from share id to the count of total members (including the
-        owner). This is represented by ome.model.meta.ShareMember links.
-        
-        @param share_ids:   List of IDs
-        @type share_ids:    List of Longs
-        @return:            Dict of shareId: member-count
-        @rtype:             Dict of long: long
-        """
-        
-        sh = self.getShareService()
-        return sh.getMemberCount(share_ids)
-    
-    def getCommentCount(self, share_ids):
-        """ 
-        Returns a map from share id to comment count.
-        
-        @param share_ids:   List of IDs
-        @type share_ids:    List of Longs
-        @return:            Dict of shareId: comment-count
-        @rtype:             Dict of long: long 
-        """
-        
-        sh = self.getShareService()
-        return sh.getCommentCount(share_ids)
-    
-    def getContents(self, share_id):
-        """ 
-        Looks up all items belonging to the share, wrapped in object wrapper
-        
-        @param share_id:    share ID
-        @type share_id:     Long
-        @return:            Share contents
-        @rtype:             L{ShareContentWrapper} generator
-        """
-        
-        sh = self.getShareService()
-        for e in sh.getContents(long(share_id)):
-            yield ShareContentWrapper(self, e)
-    
-    def getComments(self, share_id):
-        """
-        Looks up all comments which belong to the share, wrapped in object wrapper
-        
-        @param share_id:    share ID
-        @type share_id:     Long
-        @return:            Share comments
-        @rtype:             L{ShareCommentWrapper} generator
-        """
-        
-        sh = self.getShareService()
-        for e in sh.getComments(long(share_id)):
-            yield ShareCommentWrapper(self, e)
-    
-    def getAllMembers(self, share_id):
-        """
-        Get all {@link Experimenter users} who are a member of the share.
-        
-        @param share_id:    share ID
-        @type share_id:     Long
-        @return:            Members of share
-        @rtype:             L{ExperimenterWrapper} generator
-        """
-        
-        sh = self.getShareService()
-        for e in sh.getAllMembers(long(share_id)):
-            yield ExperimenterWrapper(self, e)
-
-    def getAllGuests(self, share_id):
-        """
-        Get the email addresses for all share guests.
-        
-        @param share_id:    share ID
-        @type share_id:     Long
-        @return:            List of e-mail addresses
-        @rtype:             List of Strings
-        """
-        
-        sh = self.getShareService()
-        return sh.getAllGuests(long(share_id))
-
-    def getAllUsers(self, share_id):
-        """
-        Get a single set containing the login names of the users as well email addresses for guests.
-        
-        @param share_id:    share ID
-        @type share_id:     Long
-        @return:            List of usernames and e-mail addresses
-        @rtype:             List of Strings
-        """
-        
-        sh = self.getShareService()
-        return sh.getAllUsers(long(share_id))
-    
     ############################
     # Timeline service getters #
 
@@ -2512,23 +2390,6 @@ class _BlitzGateway (object):
         if img is not None:
             img = ImageWrapper(self, img)
         return img
-
-    def getShare (self, oid):
-        """
-        Gets share for the given share id.
-        
-        @param oid:     Share ID.
-        @type oid:      Long
-        @return:        ShareWrapper or None
-        @rtype:         L{ShareWrapper}
-        """
-        
-        sh_serv = self.getShareService()
-        sh = sh_serv.getShare(long(oid))
-        if sh is not None:
-            return ShareWrapper(self, sh)
-        else:
-            return None
     
     def getScreen (self, oid):
         """
@@ -4439,90 +4300,6 @@ class _WellSampleWrapper (BlitzObjectWrapper):
 
 WellSampleWrapper = _WellSampleWrapper
 
-class _ShareWrapper (BlitzObjectWrapper):
-    """
-    omero_model_ShareI class wrapper extends BlitzObjectWrapper.
-    """
-    
-    def getStartDate(self):
-        """
-        Gets the start date of the share
-        
-        @return:    Start Date-time
-        @rtype:     datetime object
-        """
-        
-        return datetime.fromtimestamp(self.getStarted().val/1000)
-        
-    def getExpirationDate(self):
-        """
-        Gets the end date for the share
-        
-        @return:    End Date-time
-        @rtype:     datetime object
-        """
-        
-        try:
-            return datetime.fromtimestamp((self.getStarted().val+self.getTimeToLive().val)/1000)
-        except ValueError:
-            pass
-        return None
-    
-    def isExpired(self):
-        """
-        Returns True if we are past the end date of the share
-        
-        @return:    True if share expired
-        @rtype:     Boolean
-        """
-        
-        try:
-            if (self.getStarted().val+self.getTimeToLive().val)/1000 <= time.time():
-                return True
-            else:
-                return False
-        except:
-            return True
-    
-    def isOwned(self):
-        """
-        Returns True if share is owned by the current user
-        
-        @return:    True if owned
-        @rtype:     Boolean
-        """
-        
-        try:
-            if self.owner.id.val == self._conn.getEventContext().userId:
-                return True
-        except:
-            logger.error(traceback.format_exc())
-        return False
-    
-    def getOwner(self):
-        """
-        The owner of this share
-        
-        @return:    Owner
-        @rtype:     L{ExperimenterWrapper}
-        """
-        
-        return omero.gateway.ExperimenterWrapper(self, self.owner)
-
-ShareWrapper = _ShareWrapper
-
-class ShareContentWrapper (BlitzObjectWrapper):
-    """
-    wrapper for share content, extends BlitzObjectWrapper.
-    """
-    pass
-
-class ShareCommentWrapper (AnnotationWrapper):
-    """
-    wrapper for share comment, extends BlitzObjectWrapper.
-    """
-    pass
-
 #class CategoryWrapper (BlitzObjectWrapper):
 #    def __bstrap__ (self):
 #        self.LINK_CLASS = "CategoryImageLink"
@@ -6234,7 +6011,18 @@ class _ImageWrapper (BlitzObjectWrapper):
         """
         
         return self._pd.t
-
+    
+    @assert_pixels
+    def getPixelsType (self):
+        """
+        Gets the physical size X of pixels in microns
+        
+        @return:    Size of pixel in x or O
+        @rtype:     float
+        """
+        rv = self._obj.getPrimaryPixels().getPixelsType().value
+        return rv is not None and rv.val or 'unknown'
+    
     @assert_pixels
     def getPixelSizeX (self):
         """
@@ -6243,7 +6031,6 @@ class _ImageWrapper (BlitzObjectWrapper):
         @return:    Size of pixel in x or O
         @rtype:     float
         """
-        
         rv = self._obj.getPrimaryPixels().getPhysicalSizeX()
         return rv is not None and rv.val or 0
 

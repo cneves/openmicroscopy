@@ -217,7 +217,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
     _this.refresh();
     _load(function () {
       //_this.refresh();
-      if (!_this.loadedImg.current.query.zm) {
+      if (!_this.loadedImg.current.query.zm && !_this.loadedImg.tiles) {
         var size = getSizeDict();
         _this.viewportimg.get(0).setZoomToFit(true, size.width, size.height);
       }
@@ -259,7 +259,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
       showLoading();
       if (_this.loadedImg.tiles) {
           rcb()
-          _this.viewportimg.get(0).setUpTiles(_this.loadedImg.tile_size.width, _this.loadedImg.tile_size.height, _this.loadedImg.max_zoom, href);
+          _this.viewportimg.get(0).setUpTiles(_this.loadedImg.tile_size.width, _this.loadedImg.tile_size.height, _this.loadedImg.init_zoom, _this.loadedImg.max_zoom, href);
       } else {
           _this.viewportimg.load(rcb);
           _this.viewportimg.attr('src', href);

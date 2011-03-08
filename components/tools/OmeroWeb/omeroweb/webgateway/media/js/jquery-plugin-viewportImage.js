@@ -33,7 +33,7 @@ $.fn.viewportImage = function(options) {
     var overlay = $('<img id="'+insideId+'-ovl">').appendTo(dragdiv);
     overlay.addClass('weblitz-viewport-img').hide();
     
-    $('<div id="weblitz-viewport-tiles"><div class="well"><!-- --></div><div class="surface"><!-- --></div></div>').appendTo(wrapdiv);
+    $('<div id="weblitz-viewport-tiles"><div class="well"><!-- --></div><div class="surface"><!-- --></div><p class="controls"><span class="zoomIn" title="Zoom In">+</span><span class="zoomOut" title="Zoom Out">-</span><span class="maximize"><img src="/webtest/statictest/img/panojs/window.gif" style="position: absolute; bottom: 4px; right: 5px;" title="Maximize"/></span></p></div>').appendTo(wrapdiv);
     var tilecontainer = jQuery('#weblitz-viewport-tiles');
     var viewerBean = null;
     
@@ -336,6 +336,8 @@ $.fn.viewportImage = function(options) {
       if (justDirection) {
         var t = Math.max(1,((imagewidth+3)*cur_zoom/imagewidth) - cur_zoom);
         increment = cur_zoom + (increment>0?t:-t);
+      } else if (viewerBean != null) {
+        increment = 100;
       }
       this.setZoom(parseInt(increment));
     }
@@ -431,23 +433,26 @@ $.fn.viewportImage = function(options) {
     			tileSizeX: X_TILE_SIZE,
     			tileSizeY: Y_TILE_SIZE,
     			maxZoom: TILE_MAX_ZOOM,
-    			initialZoom: TILE_MAX_ZOOM,
+    			initialZoom: TILE_INIT_ZOOM,
     			blankTile: '/appmedia/webgateway/img/panojs/blank.gif',
     			//loadingTile: '/appmedia/webgateway/img/panojs/spinner.gif'
     		});
     		//viewerBean.fitToWindow(0);
     		viewerBean.init();
-    		//viewerBean.recenter({'x':400 ,'y':800}, true);
+    		//viewerBean.recenter({'x':wrapdiv.width()/2 ,'y':wrapdiv.height()/2}, true);
+    	} else {
+    	    viewerBean.tileUrlProvider.baseUri=tile_url;
+    	    viewerBean.resize();
     	}
     }
     
     
-    this.setUpTiles = function (xtilesize,ytilesize, max_zoom, href) {
-        
+    this.setUpTiles = function (xtilesize,ytilesize, init_zoom, max_zoom, href) {
         X_TILE_SIZE = xtilesize;
         Y_TILE_SIZE = ytilesize;
         tile_url = href;
         TILE_MAX_ZOOM = max_zoom;
+        TILE_INIT_ZOOM = init_zoom;
         tilecontainer.css({width: wrapwidth, height: wrapheight});
         initializeGraphic();
         
@@ -462,7 +467,7 @@ $.fn.viewportImage = function(options) {
       wrapheight = wrapdiv.height();
       //orig_width = image.get(0).clientWidth;
       //orig_height = image.get(0).clientHeight;   
-         
+      
       if (viewerBean != null) {
           tilecontainer.css({width: wrapwidth, height: wrapheight});
           viewerBean.resize();

@@ -4,9 +4,20 @@ omero.gateway and omeroweb.webgateway
 
 List of latest commits merged from develop into dev_4_1_custom
 
+*** 2011-03-07 ***
+
+-- omeroweb.webgateway
+9ef1e8b455b9d00beaa6206ce58791cd894a4014 automated initial if image > 1024, see #4499
+(dev_4_1_custom: 34d3a33e200f5184baf563718cea6674fe6cc15d)
+-- omero.gateway
+f0e2fe8dab128001726f7f55bd0cbc9bf3214079 Fixed docs typo in gateway init.py See #3649
+(dev_4_1_custom: ca71bc04aea152057f25ea5ce66cb42f13524401)
+
 *** 2011-02-23  ***
 
 -- omeroweb.webgateway
 8cf7ea3cf0e9a43d27496d24b5808936fe0f2839 this solved the problem with saving rendering settings fixes #4408
+(dev_4_1_custom: ba7dc9a9b76a80c7cf44c0d1e473755122293873)
 -- omero.gateway
 779b2b5d6a5ae1a49c5bcd2f1d5e6f2c9307556d Fixing delete default options in blitz gateway to keep child & annotations by default. See #3649
+(dev_4_1_custom: 3eef1a9c59069101374694afecbcc6da814771b2)
