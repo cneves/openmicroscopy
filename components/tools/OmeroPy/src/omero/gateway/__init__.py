@@ -2419,7 +2419,7 @@ class _BlitzGateway (object):
             return ScreenWrapper(self, sc)
         else:
             return None
-    
+
     def getPlate (self, oid):
         """
         Gets a Plate for given ID, with owner, group and screens loaded
@@ -2443,7 +2443,37 @@ class _BlitzGateway (object):
         else:
             return None
     
+    def findObjects (self, obj_type, **kwargs):
+        """
+        find Objects by type, filtered by named arguments. Not Ordered. 
+        Supported types are "Project", "Dataset", "Image", "Screen", "Plate", "Well"
+        Filter arguments depend on class, and only direct object properties are supported,
+        like 'name' and 'description'.
+        Example:
+        >>> obj.findObjects('project', name='ProjName')
+        
+        @param obj_type:    Object type. E.g. "Project" see above,  case is not important
+        @type obj_type:     String
+        @return:            Generator yielding appropriate object wrappers
+        @rtype:             see above
+        """
 
+        wrapper = KNOWN_WRAPPERS.get(obj_type.lower(), None)
+        if not wrapper:
+            raise TypeError     # TODO - maybe a better Error?
+        q = self.getQueryService()
+        w = ''
+        p = omero.sys.Parameters()
+        p.map = {}
+        sql = "select obj from %s obj join fetch obj.details.owner join fetch obj.details.group" % wrapper().OMERO_CLASS
+        for k,v in kwargs.items():
+            w += ' obj.%s=:%s' % (k, k)
+            p.map[k] = omero_type(v)
+        if len(w):
+            sql += ' where' + w
+        for e in q.findAllByQuery(sql, p):
+            yield wrapper(self, e)
+    
     def getObjects(self, obj_type, ids):
         """
         Retrieve Objects by type and given IDs. Not Ordered. 
@@ -2459,22 +2489,16 @@ class _BlitzGateway (object):
         @rtype:             see above
         """
         
-        wrappers = {"Project":ProjectWrapper,
-            "Dataset":DatasetWrapper,
-            "Image":ImageWrapper,
-            "Screen":ScreenWrapper,
-            "Plate":PlateWrapper,
-            "Well":WellWrapper}
-        
-        if obj_type not in wrappers:
+        wrapper = KNOWN_WRAPPERS.get(obj_type.lower(), None)
+        if not wrapper:
             raise TypeError     # TODO - maybe a better Error?
         q = self.getQueryService()
         p = omero.sys.Parameters()
         p.map = {}
         p.map["ids"] = rlist([rlong(a) for a in ids])
-        sql = "select obj from %s obj join fetch obj.details.owner join fetch obj.details.group where obj.id in (:ids)" % obj_type
+        sql = "select obj from %s obj join fetch obj.details.owner join fetch obj.details.group where obj.id in (:ids)" % wrapper().OMERO_CLASS
         for e in q.findAllByQuery(sql, p):
-            yield wrappers[obj_type](self, e)
+            yield wrapper(self, e)
     
     def getObjectsByAnnotations(self, obj_type, annids):
         """
@@ -2487,20 +2511,14 @@ class _BlitzGateway (object):
         @rtype:             L{BlitzObjectWrapper} generator
         """
         
-        wrappers = {"Project":ProjectWrapper,
-            "Dataset":DatasetWrapper,
-            "Image":ImageWrapper,
-            "Screen":ScreenWrapper,
-            "Plate":PlateWrapper,
-            "Well":WellWrapper}
-            
-        if not obj_type in wrappers:
-            raise AttributeError('It only retrieves: Project, Dataset, Image, Screen, Plate or Well')
+        wrapper = KNOWN_WRAPPERS.get(obj_type.lower(), None)
+        if not wrapper:
+            raise TypeError     # TODO - maybe a better Error?
         
         sql = "select ob from %s ob " \
               "left outer join fetch ob.annotationLinks obal " \
               "left outer join fetch obal.child ann " \
-              "where ann.id in (:oids)" % obj_type
+              "where ann.id in (:oids)" % wrapper().OMERO_CLASS
             
         q = self.getQueryService()
         p = omero.sys.Parameters()
@@ -2508,7 +2526,7 @@ class _BlitzGateway (object):
         p.map["oids"] = rlist([rlong(o) for o in set(annids)])
         for e in q.findAllByQuery(sql,p):
             kwargs = {'link': BlitzObjectWrapper(self, e.copyAnnotationLinks()[0])}
-            yield wrappers[obj_type](self, e)
+            yield wrapper(self, e)
             
     def getAnnotations(self, ids):
         """
@@ -4181,6 +4199,15 @@ class _ScreenWrapper (BlitzObjectWrapper):
 
 ScreenWrapper = _ScreenWrapper
 
+def _letterGridLabel (i):
+    r = chr(ord('A') + i%26)
+    i = i/26
+    while i > 0:
+        i -= 1
+        r = chr(ord('A') + i%26) + r
+        i = i/26
+    return r
+
 class _PlateWrapper (BlitzObjectWrapper):
     """
     omero_model_PlateI class wrapper extends BlitzObjectWrapper.
@@ -4231,6 +4258,9 @@ class _PlateWrapper (BlitzObjectWrapper):
                 self._childcache[(well.row.val, well.column.val)] = well
         return self._childcache.values()
 
+    def countChildren (self):
+        return len(self._listChildren())
+
     def getGridSize (self):
         """
         Iterates all wells on plate to retrieve grid size
@@ -4250,6 +4280,26 @@ class _PlateWrapper (BlitzObjectWrapper):
         for child in self._listChildren():
             rv[child.row.val][child.column.val] = childw(self._conn, child, index=index)
         return rv
+
+    def getColumnLabels (self):
+        """
+        Returns a list of labels for the columns on this plate
+        """
+        if self.columnNamingConvention.lower()=='number':
+            return range(1, self.getGridSize()['columns']+1)
+        else:
+            # this should simply be precalculated!
+            return [_letterGridLabel(x) for x in range(self.getGridSize()['columns'])]
+
+    def getRowLabels (self):
+        """
+        Returns a list of labels for the rows on this plate
+        """
+        if self.rowNamingConvention.lower()=='number':
+            return range(1, self.getGridSize()['rows']+1)
+        else:
+            # this should simply be precalculated!
+            return [_letterGridLabel(x) for x in range(self.getGridSize()['rows'])]
 
     def getNumberOfFields (self):
         """
@@ -6878,3 +6928,18 @@ class _InstrumentWrapper (BlitzObjectWrapper):
         return rv
 
 InstrumentWrapper = _InstrumentWrapper
+
+KNOWN_WRAPPERS = {}
+
+def refreshWrappers ():
+    """
+    this needs to be called by modules that extend the base wrappers
+    """
+    KNOWN_WRAPPERS.update({"project":ProjectWrapper,
+                  "dataset":DatasetWrapper,
+                  "image":ImageWrapper,
+                  "screen":ScreenWrapper,
+                  "plate":PlateWrapper,
+                  "well":WellWrapper})
+        
+refreshWrappers()
