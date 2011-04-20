@@ -27,7 +27,7 @@
     <link rel="stylesheet" type="text/css" href="/appmedia/webgateway/css/3rdparty/JQuerySpinBtn.css" />
     <link rel="stylesheet" type="text/css" href="/appmedia/webgateway/css/3rdparty/jquery-ui-1.7.2.custom.css" media="all" />
     <link rel="stylesheet" type="text/css" href="/appmedia/webgateway/css/omero_image.css" media="all" />
-    <link rel="stylesheet" type="text/css" href="/appmedia/webgateway/css/panojs.css" media="all" />
+    <link rel="stylesheet" type="text/css" href="/appmedia/webgateway/css/3rdparty/panojs.css" media="all" />
 {% endblock %}
 
 {% block extra_js %}
@@ -44,10 +44,19 @@
     <script type="text/javascript" src="/appmedia/webgateway/js/gs_utils.js"></script>
     <!-- for display of ROIs over the image -->
     <script type="text/javascript" src="/appmedia/webgateway/js/roi_display-plugin.js"></script>
-    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/raphael-min.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/raphael.js"></script>
     <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/scale.raphael.js"></script>
 
-    <script type="text/javascript" src="/appmedia/webgateway/js/panojs/PanoJS.js"></script>
+    <!-- big images -->
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/utils.js"></script>    
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/PanoJS.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/controls.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/pyramid_Bisque.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/pyramid_imgcnv.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/pyramid_Zoomify.js"></script>        
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/control_thumbnail.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/control_info.js"></script>
+    <script type="text/javascript" src="/appmedia/webgateway/js/3rdparty/panojs/control_svg.js"></script>
     
 {% endblock %}
 
@@ -183,7 +192,7 @@
                  class="squared' + (channels[i].active?' pressed':'') + '"\
                  style="background-color: #'+channels[i].color+'"\
                  title="'+channels[i].label+'"\
-                 onclick="viewport.toggleChannel('+i+')">'+channels[i].emissionWave+'</button>');
+                 onclick="viewport.toggleChannel('+i+')">'+channels[i].label+'</button>');
 
     }
 
@@ -233,7 +242,7 @@
       .replace(/\$act/g, channels[i].active?'checked':'')
       .replace(/\$idx0/g, i) // Channel Index, 0 based
       .replace(/\$idx1/g, i+1) // Channel Index, 1 based
-      .replace(/\$cwl/g, channels[i].emissionWave) // Wavelength
+      .replace(/\$cwl/g, channels[i].label) // Wavelength
       .replace(/\$cls/g, i/2!=parseInt(i/2)?'even':'odd') // class
       );
       $('#wblitz-ch'+(i)+'-cw').rangewidget({
@@ -282,7 +291,7 @@
       })
       .bind('hiding', function () {$(this).parent().siblings('.picker-selected').html('&nbsp;')})
       .bind('prepared', function () {
-        zindex_automator('.postit', 10, $('#cbpicker-box'));
+        zindex_automator('.postit', 210, $('#cbpicker-box'));
       })
       .bind('changed', function () {
         $(this).parents('tr:first').next().find('.ui-slider-range').css('background-color', $(this).css('background-color'));
@@ -434,6 +443,8 @@
             viewport.viewportimg.roi_display({width:{{ image.getWidth }}, 
                                             height:{{ image.getHeight }},
                                             json_url:'{% url webgateway_get_rois_json image.id %}' });
+            var zm = viewport.getZoom();
+            viewport.viewportimg.get(0).setRoiZoom(zm);
       }
       else {
           // if ROIs already loaded, there won't be a callback to show table - do it manually
@@ -995,7 +1006,7 @@
     };
     $("#legend-postit").bind('opening', legend_open);
 
-    zindex_automator('.postit', 10);
+    zindex_automator('.postit', 210);
 
     /* Make (kind of) sure that closing the rendering defs window closes an eventually opened color picker */
     $("#rdef-postit").bind('closed',

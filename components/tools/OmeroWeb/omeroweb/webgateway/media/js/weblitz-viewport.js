@@ -259,7 +259,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
       showLoading();
       if (_this.loadedImg.tiles) {
           rcb()
-          _this.viewportimg.get(0).setUpTiles(_this.loadedImg.tile_size.width, _this.loadedImg.tile_size.height, _this.loadedImg.init_zoom, _this.loadedImg.max_zoom, href);
+          _this.viewportimg.get(0).setUpTiles(_this.loadedImg.size.width, _this.loadedImg.size.height, _this.loadedImg.tile_size.width, _this.loadedImg.tile_size.height, _this.loadedImg.init_zoom, _this.loadedImg.max_zoom, href);
       } else {
           _this.viewportimg.load(rcb);
           _this.viewportimg.attr('src', href);
@@ -823,6 +823,7 @@ jQuery._WeblitzViewport = function (container, server, options) {
    * @return {String} The current query with state information.
    */
   this.getQuery = function (include_slider_pos) {
+      
     var query = new Array();
     /* Channels (verbose as IE7 does not support Array.filter */
     var chs = new Array();

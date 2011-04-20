@@ -49,7 +49,7 @@ from math import sqrt
 
 import omero_Constants_ice  
 import omero_ROMIO_ice
-from omero.rtypes import rstring, rint, rlong, rbool, rtime, rlist
+from omero.rtypes import rstring, rint, rlong, rbool, rtime, rlist, rdouble
 
 if omero_version < ['4','2','0']:
     import makemovie
@@ -191,6 +191,13 @@ class BlitzObjectWrapper (object):
         if hasattr(self, '_oid'):
             return '<%s id=%s>' % (self.__class__.__name__, str(self._oid))
         return super(BlitzObjectWrapper, self).__repr__()
+        
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("Project")
+        """
+        return "select obj from %s obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent" % self.OMERO_CLASS
 
     def _getChildWrapper (self):
         """
@@ -652,7 +659,10 @@ class BlitzObjectWrapper (object):
         if not hasattr(self._obj, 'isAnnotationLinksLoaded'): #pragma: no cover
             raise NotImplementedError
         if not self._obj.isAnnotationLinksLoaded():
-            links = self._conn.getQueryService().findAllByQuery("select l from %sAnnotationLink as l join fetch l.child as a where l.parent.id=%i" % (self.OMERO_CLASS, self._oid), None)
+            query = "select l from %sAnnotationLink as l join fetch l.details.owner join fetch l.details.creationEvent "\
+            "join fetch l.child as a join fetch a.details.owner join fetch a.details.creationEvent "\
+            "where l.parent.id=%i" % (self.OMERO_CLASS, self._oid)
+            links = self._conn.getQueryService().findAllByQuery(query, None)
             self._obj._annotationLinksLoaded = True
             self._obj._annotationLinksSeq = links
 
@@ -758,6 +768,7 @@ class BlitzObjectWrapper (object):
             sql += " and (an.ns not in (:ns) or an.ns is null)"        
         if eid is not None:
             sql += " and an.details.owner.id=:eid"
+            p.map["eid"] = rlong(eid)
  
         for e in q.findAllByQuery(sql,p):
             yield AnnotationWrapper._wrap(self._conn, e)
@@ -1374,7 +1385,6 @@ class _BlitzGateway (object):
             self._proxies['session'] = ProxyObjectWrapper(self, 'getSessionService')
             self._proxies['share'] = ProxyObjectWrapper(self, 'getShareService')
             self._proxies['sharedres'] = ProxyObjectWrapper(self, 'sharedResources')
-            self._proxies['thumbs'] = ProxyObjectWrapper(self, 'createThumbnailStore')
             self._proxies['timeline'] = ProxyObjectWrapper(self, 'getTimelineService')
             self._proxies['types'] = ProxyObjectWrapper(self, 'getTypesService')
             self._proxies['update'] = ProxyObjectWrapper(self, 'getUpdateService')
@@ -1972,52 +1982,29 @@ class _BlitzGateway (object):
 
     #############################
     # Top level object fetchers #
-    
-    def listProjects (self, only_owned=False):
-        """
-        List every Project controlled by the security system, ordered by name
-        
-        @param only_owned:  If True, only return Projects owned by current user
-        @type only_owned:   Boolean
-        @return:            Generator yielding L{ProjectWrapper}
-        @rtype:             L{ProjectWrapper} generator
-        """
-        
-        q = self.getQueryService()
-        cache = {}
-        if only_owned:
-            params = omero.sys.Parameters()
-            params.map = {'owner_id': rlong(self._userid)}
-            for e in q.findAllByQuery("from Project as p where p.details.owner.id=:owner_id order by p.name", params):
-                yield ProjectWrapper(self, e, cache)
-        else:
-            for e in q.findAll('Project', None):
-                yield ProjectWrapper(self, e, cache)
 
-#    def listCategoryGroups (self):
-#        q = self.getQueryService()
-#        cache = {}
-#        for e in q.findAll("CategoryGroup", None):
-#            yield CategoryGroupWrapper(self, e, cache)
+    def listProjects (self, eid=None, only_owned=False):
+        """
+        List every Project controlled by the security system.
+
+        @param eid:         Filters Projects by owner ID
+        @param only_owned:  Short-cut for filtering Projects by current user
+        @rtype:             L{ProjectWrapper} list
+        """
+
+        params = omero.sys.Parameters()
+        params.theFilter = omero.sys.Filter()
+        if only_owned:
+            params.theFilter.ownerId = rlong(self._userid)
+        elif eid is not None:
+            params.theFilter.ownerId = rlong(eid)
+
+        return self.getObjects("Project", params=params)
 
     #################################################
     ## IAdmin
     
     # GROUPS
-    
-    def getGroup(self, gid):
-        """ 
-        Fetch a Group and all contained users, by group ID.
-        
-        @param gid:     Group Id
-        @type gid:      Long
-        @return:        The group
-        @rtype:         L{ExperimenterGroupWrapper}
-        """
-        
-        admin_service = self.getAdminService()
-        group = admin_service.getGroup(long(gid))
-        return ExperimenterGroupWrapper(self, group)
     
     def findGroup(self, name):
         """ 
@@ -2111,32 +2098,7 @@ class _BlitzGateway (object):
         admin_serv = self.getAdminService()
         for exp in admin_serv.lookupExperimenters():
             yield ExperimenterWrapper(self, exp)
-    
-    def getExperimenters(self, ids=None):
-        """ 
-        Get experimenters for the given user ids. If ID is not set, return all apart from current user.
-        TODO: omero.gateway.BlitzGateway has getExperimenter(id) method
-        
-        @param ids:     List of experimenter IDs
-        @type ids:      L{Long} 
-        @return:        Generator yielding experimetners list
-        @rtype:         L{ExperimenterWrapper} generator
-        
-        """
-        
-        q = self.getQueryService()
-        p = omero.sys.Parameters()
-        if ids is not None:
-            p.map = {}
-            p.map["ids"] = rlist([rlong(long(a)) for a in ids])
-            sql = "select e from Experimenter as e where e.id in (:ids)"
-        else:
-            p.map = {}
-            p.map["id"] = rlong(self.getEventContext().userId)
-            sql = "select e from Experimenter as e where e.id != :id "
-        for e in q.findAllByQuery(sql, p):
-            yield ExperimenterWrapper(self, e)
-    
+
     def findExperimenters (self, start=''):
         """
         Return a generator for all Experimenters whose omeName starts with 'start'.
@@ -2216,7 +2178,7 @@ class _BlitzGateway (object):
         @rtype:     L{ExperimenterWrapper} generator
         """
                 
-        default = self.getGroup(self.getEventContext().groupId)
+        default = self.getObject("ExperimenterGroup", self.getEventContext().groupId)
         if not default.isPrivate() or default.isLeader():
             for d in default.copyGroupExperimenterMap():
                 if d.child.id.val != self.getEventContext().userId:
@@ -2240,40 +2202,7 @@ class _BlitzGateway (object):
         for e in q.findAllByQuery(sql, p):
             if e.id.val != self.getEventContext().userId:
                 yield ExperimenterWrapper(self, e)
-    
-    def listGroups(self):
-        """
-        Looks up all groups and all related experimenters. 
-        TODO: The experimenters are also loaded?
-        
-        @return:    All groups
-        @rtype:     L{ExperimenterGroupWrapper} generator
-        """
-            
-        admin_serv = self.getAdminService()
-        for gr in admin_serv.lookupGroups():
-            yield ExperimenterGroupWrapper(self, gr)
-    
-    def getExperimenterGroups(self, ids):
-        """ 
-        Get group for for the given group ids. 
-        TODO: omero.gateway.BlitzGateway has getGroup(id) method
-        
-        @param ids:     List of group IDs
-        @type ids:      L{Long} 
-        @return:        Generator yielding groups list
-        @rtype:         L{ExperimenterGroupWrapper} generator
-        """
-            
-        q = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {}
-        p.map["ids"] = rlist([rlong(a) for a in ids])
-        sql = "select e from ExperimenterGroup as e where e.id in (:ids)"
-        for e in q.findAllByQuery(sql, p):
-            if e.name.val != 'user':
-                yield ExperimenterGroupWrapper(self, e)
-    
+
     def listOwnedGroups(self):
         """
         Looks up owned groups for the logged user.
@@ -2341,117 +2270,17 @@ class _BlitzGateway (object):
     ###########################
     # Specific Object Getters #
 
-    def getProject (self, oid):
+    def getObject (self, obj_type, oid=None, params=None, attributes=None):
         """
-        Return Project for the given ID.
-        
-        @param oid:     Project ID.
-        @type oid:      Long
-        @return:        _ProjectWrapper or None
-        @rtype:         L{ProjectWrapper}
+        Convenience method for L{getObjects}. Returns a single wrapped object or None. 
         """
-        
-        q = self.getQueryService()
-        pr = q.find("Project", long(oid))
-        if pr is not None:
-            pr = ProjectWrapper(self, pr)
-        return pr
-    
-    def findProject (self, name):
-        """
-        Return Project with the given name.
-        
-        @param name: Project name.
-        @return:    _ProjectWrapper or None
-        @rtype:     L{ProjectWrapper}
-        """
-        
-        q = self.getQueryService()
-        params = omero.sys.Parameters()
-        if not params.map:
-            params.map = {}
-        params.map['name'] = rstring(name)
-        pr = q.findAllByQuery("from Project as p where p.name=:name", params)
-        if len(pr):
-            return ProjectWrapper(self, pr[0])
-        return None
-
-    def getDataset (self, oid):
-        """
-        Return Dataset for the given ID.
-        
-        @param oid: Dataset ID.
-        @type oid:      Long
-        @return:    _DatasetWrapper or None
-        @rtype:     L{DatasetWrapper}
-        """
-        
-        q = self.getQueryService()
-        ds = q.find("Dataset", long(oid))
-        if ds is not None:
-            ds = DatasetWrapper(self, ds)
-        return ds
-
-    def getImage (self, oid):
-        """
-        Return Image for the given ID.
-        
-        @param oid: Image ID.
-        @type oid:      Long
-        @return:    _ImageWrapper or None
-        @rtype:     L{ImageWrapper}
-        """
-        
-        q = self.getQueryService()
-        img = q.find("Image", long(oid))
-        if img is not None:
-            img = ImageWrapper(self, img)
-        return img
-    
-    def getScreen (self, oid):
-        """
-        Gets a Screen for given ID, with owner and group loaded
-        
-        @param oid:     Screen ID.
-        @type oid:      Long
-        @return:        ScreenWrapper or None
-        @rtype:         L{ScreenWrapper}
-        """
-        
-        query_serv = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {}
-        p.map["oid"] = rlong(long(oid))
-        sql = "select sc from Screen sc join fetch sc.details.owner join fetch sc.details.group where sc.id=:oid "
-        sc = query_serv.findByQuery(sql,p)
-        if sc is not None:
-            return ScreenWrapper(self, sc)
-        else:
+        oids = (oid!=None) and [oid] or None
+        result = self.getObjects(obj_type, oids, params=params, attributes=attributes)
+        try:
+            return result.next()
+        except StopIteration:
             return None
 
-    def getPlate (self, oid):
-        """
-        Gets a Plate for given ID, with owner, group and screens loaded
-        
-        @param oid:     Plate ID.
-        @type oid:      Long
-        @return:        PlateWrapper or None
-        @rtype:         L{PlateWrapper}
-        """
-        
-        query_serv = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {}
-        p.map["oid"] = rlong(long(oid))
-        sql = "select pl from Plate pl join fetch pl.details.owner join fetch pl.details.group " \
-              "left outer join fetch pl.screenLinks spl " \
-              "left outer join fetch spl.parent sc where pl.id=:oid "
-        pl = query_serv.findByQuery(sql,p)
-        if pl is not None:
-            return PlateWrapper(self, pl)
-        else:
-            return None
-    
     def getWell (self, oid):
         query_serv = self.getQueryService()
         p = omero.sys.Parameters()
@@ -2479,7 +2308,6 @@ class _BlitzGateway (object):
         @return:            Generator yielding appropriate object wrappers
         @rtype:             see above
         """
-
         wrapper = KNOWN_WRAPPERS.get(obj_type.lower(), None)
         if not wrapper:
             raise TypeError     # TODO - maybe a better Error?
@@ -2496,32 +2324,113 @@ class _BlitzGateway (object):
         for e in q.findAllByQuery(sql, p):
             yield wrapper(self, e)
     
-    def getObjects(self, obj_type, ids):
+
+    def getObjects (self, obj_type, ids=None, params=None, attributes=None):
         """
-        Retrieve Objects by type and given IDs. Not Ordered. 
-        Supported types are "Project", "Dataset", "Image", "Screen", "Plate", "Well"
-        Returns generator of L{ProjectWrapper}, L{DatasetWrapper}, L{ImageWrapper}
-        L{PlateWrapper} or L{WellWrapper}.
+        Retrieve Objects by type E.g. "Image". Not Ordered. 
+        Returns generator of appropriate L{BlitzObjectWrapper} type. E.g. L{ImageWrapper}.
+        If ids == None, all available objects will be returned. i.e. listObjects()
         
         @param obj_type:    Object type. E.g. "Project" see above
         @type obj_type:     String
         @param ids:         object IDs
         @type ids:          List of Long
-        @return:            Generator yielding Images
-        @rtype:             see above
+        @return:            Generator yielding wrapped objects.
         """
-        
-        wrapper = KNOWN_WRAPPERS.get(obj_type.lower(), None)
-        if not wrapper:
-            raise TypeError     # TODO - maybe a better Error?
+
+        if type(obj_type) is type(''):
+            wrapper = KNOWN_WRAPPERS.get(obj_type.lower(), None)
+            if wrapper == None:
+                raise KeyError("obj_type of %s not supported by getOjbects(). E.g. use 'Image' etc" % obj_type)
+        else:
+            raise AttributeError("getObjects uses a string to define obj_type, E.g. 'Image'")
+
         q = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {}
-        p.map["ids"] = rlist([rlong(a) for a in ids])
-        sql = "select obj from %s obj join fetch obj.details.owner join fetch obj.details.group where obj.id in (:ids)" % wrapper().OMERO_CLASS
-        for e in q.findAllByQuery(sql, p):
-            yield wrapper(self, e)
-    
+        if params == None:
+            params = omero.sys.Parameters()
+        if params.map == None:
+            params.map = {}
+
+        # get the base query from the instantiated object itself. E.g "select obj Project as obj"
+        query = wrapper()._getQueryString()
+
+        clauses = []
+        # getting object by ids
+        if ids != None:
+            clauses.append("obj.id in (:ids)")
+            params.map["ids"] = rlist([rlong(a) for a in ids])
+
+        # support filtering by owner (not for some object types)
+        if params.theFilter and params.theFilter.ownerId and obj_type.lower() not in ["experimentergroup", "experimenter"]:
+            clauses.append("owner.id = (:eid)")
+            params.map["eid"] = params.theFilter.ownerId
+
+        # finding by attributes
+        if attributes != None:
+            for k,v in attributes.items():
+                clauses.append('obj.%s=:%s' % (k, k) )
+                params.map[k] = omero_type(v)
+
+        if clauses:
+            query += " where " + (" and ".join(clauses))
+
+        result = q.findAllByQuery(query, params)
+        for r in result:
+            yield wrapper(self, r)
+
+    def getAnnotationLinks (self, parent_type, parent_ids=None, ann_ids=None, ns=None, params=None):
+        """
+        Retrieve Annotation Links by parent_type E.g. "Image". Not Ordered. 
+        Returns generator of L{AnnotationLinkWrapper}
+        If parent_ids == None, all available objects will be returned. i.e. listObjects()
+
+        @param obj_type:    Object type. E.g. "Project" see above
+        @type obj_type:     String
+        @param ids:         object IDs
+        @type ids:          List of Long
+        @return:            Generator yielding wrapped objects.
+        """
+
+        if parent_type not in ["Project", "Dataset", "Image", "Screen", "Plate"]:
+            raise AttributeError("Can only get Annotations on 'Project', 'Dataset', 'Image', 'Screen', 'Plate'")
+        wrapper = KNOWN_WRAPPERS.get(parent_type.lower(), None)
+
+        query = "select annLink from %sAnnotationLink as annLink join fetch annLink.details.owner as owner " \
+                "join fetch annLink.details.creationEvent " \
+                "join fetch annLink.child as ann join fetch ann.details.owner join fetch ann.details.creationEvent "\
+                "join fetch annLink.parent as parent" % wrapper().OMERO_CLASS
+
+        q = self.getQueryService()
+        if params == None:
+            params = omero.sys.Parameters()
+        if params.map == None:
+            params.map = {}
+
+        clauses = []
+        if parent_ids:
+            clauses.append("parent.id in (:pids)")
+            params.map["pids"] = rlist([rlong(a) for a in parent_ids])
+
+        if ann_ids:
+            clauses.append("ann.id in (:ann_ids)")
+            params.map["ann_ids"] = rlist([rlong(a) for a in ann_ids])
+
+        if ns:
+            clauses.append("ann.ns in (:ns)")
+            params.map["ns"] = rstring(ns)
+
+        if params.theFilter and params.theFilter.ownerId:
+            clauses.append("owner.id = (:eid)")
+            params.map["eid"] = params.theFilter.ownerId
+
+        if len(clauses) > 0:
+            query += " where %s" % (" and ".join(clauses))
+
+        result = q.findAllByQuery(query, params)
+        for r in result:
+            yield AnnotationLinkWrapper(self, r)
+
+
     def getObjectsByAnnotations(self, obj_type, annids):
         """
         Retrieve objects linked to the given annotation IDs
@@ -2549,140 +2458,7 @@ class _BlitzGateway (object):
         for e in q.findAllByQuery(sql,p):
             kwargs = {'link': BlitzObjectWrapper(self, e.copyAnnotationLinks()[0])}
             yield wrapper(self, e)
-            
-    def getAnnotations(self, ids):
-        """
-        Retrieves list of L{AnnotationWrapper} for the given Annotation ids.
-        
-        @param ids:     list of annotation ids
-        @type ids:      L{Long}
-        """
-        
-        q = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {}
-        p.map["ids"] = rlist([rlong(a) for a in set(ids)])
-        sql = "select a from Annotation a where a.id in (:ids) "
-        for e in q.findAllByQuery(sql,p):
-            yield AnnotationWrapper._wrap(self, e)
 
-    def listAnnotations(self, eid=None, atype=None, ns=None):
-        """
-        List Annotations controlled by the security system. 
-        
-        @param eid:         experimenter id
-        @type eid:          Long
-        @param ann_type:    Tag, File, Comment, Long, Boolean
-        @type ann_type:     String
-        @param ns:          Optional namespace, if not provided or None, only annotations without
-                            namespace set are returned
-        @type ns:           String
-        
-        @return:            Generator yielding Annotations
-        @rtype:             L{AnnotationWrapper} generator
-        """
-        q = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {}
-        sql = "select a from"        
-
-        if atype is None:
-            atype = ""
-        else:
-            if not atype in ('tag', 'comment', 'file', 'long', 'boolean'):
-                raise AttributeError("Annotation type myst be Tag, File, Comment, Rate, Boolean ")
-            atype = atype.title()
-        
-        sql+=" %sAnnotation a" % atype
-        if ns is not None:
-            p.map["ns"] = rstring(ns)
-            sql+=" where a.ns=:ns"
-        else:
-            sql+=" where a.ns is null"
-
-        # experimenter filter
-        if eid is not None:
-            p.map["eid"] = rlong(long(eid))
-            sql += " and a.details.owner.id=:eid"
-       
-        for e in q.findAllByQuery(sql,p):
-            yield AnnotationWrapper._wrap(self, e)
-                    
-    #################################
-    # Annotations                   #
-    
-    def getAnnotation (self, oid):
-        """
-        Gets file annotation by ID
-        
-        @param oid:     File Annotation ID.
-        @type oid:      Long
-        @return:        File Annotation
-        @rtype:         L{FileAnnotationWrapper}
-        """
-        
-        query_serv = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {} 
-        p.map["oid"] = rlong(long(oid))
-        sql = "select a from Annotation a where a.id = :oid"
-        e = query_serv.findByQuery(sql, p)
-        return AnnotationWrapper._wrap(self, e)
-    
-    def lookupTagAnnotation (self, name):
-        """
-        Gets tag by name, owned by the current user
-        
-        @param name:    Tag name (text value)
-        @type name:     String
-        @return:        Annotation
-        @rtype:         L{AnnotationWrapper}
-        """
-        
-        query_serv = self.getQueryService()
-        p = omero.sys.Parameters()
-        p.map = {} 
-        p.map["text"] = rstring(str(name))
-        p.map["eid"] = rlong(self.getEventContext().userId)
-        f = omero.sys.Filter()
-        f.limit = rint(1)
-        p.theFilter = f
-        sql = "select tg from TagAnnotation tg " \
-              "where tg.textValue=:text and tg.details.owner.id=:eid and tg.ns is null order by tg.textValue"
-        tg = query_serv.findByQuery(sql, p)
-        return AnnotationWrapper(self, tg)
-    
-    ##############################
-    # Annotation based iterators #
-    
-    def listImages (self, ns, params=None):
-        """
-        Lists all images with annotations in the given namespace, ordered by reverse annotation id.
-        
-        @param ns:      Annotation namespace
-        @type ns:       String
-        @param params:  Additional query parameters
-        @type params:   L{omero.sys.Parameters}
-        @return:        Generator of Images
-        @rtype:         L{ImageWrapper} generator
-        """
-        
-        if not params:
-            params = omero.sys.Parameters()
-        if not params.map:
-            params.map = {}
-        params.map["ns"] = omero_type(ns)
-        query = """
-                 select i
-                   from Image i
-                   join i.annotationLinks ial
-                   join ial.child as a
-                   where a.ns = :ns
-                   order by a.id desc """
-        for i in self.getQueryService().findAllByQuery(query, params):
-            yield ImageWrapper(self, i)
-
-    
     ################
     # Enumerations #
     
@@ -2977,11 +2753,52 @@ class _BlitzGateway (object):
         if not child:
             op["/Plate"] = "KEEP"
         return self.simpleDelete('Screen', [oid], op)
-    
+
+
+    def deleteObjects(self, obj_type, obj_ids, deleteAnns=False, deleteChildren=False):
+        """
+        TODO: - deleteObjects should be the only delete method. simpleDelete should be removed and the code
+        ported to the deleteObjects method.
+        
+        Generic method for deleting using the delete queue. 
+        Supports deletion of 'Project', 'Dataset', 'Image', 'Screen', 'Plate', 'Well', 'Annotation'.
+        Options allow to delete 'independent' Annotations (Tag, Term, File) and to delete child objects.
+        
+        @param obj_type:        String to indicate 'Project', 'Image' etc. 
+        @param obj_ids:         List of IDs for the objects to delete
+        @param deleteAnns:      If true, delete linked Tag, Term and File annotations
+        @param deleteChildren:  If true, delete children. E.g. Delete Project AND it's Datasets & Images.  
+        @return:                Delete handle
+        @rtype:                 L{omero.api.delete.DeleteHandle}
+        """
+
+        op = dict()
+        if not deleteAnns:            
+            op["/TagAnnotation"] = "KEEP"
+            op["/TermAnnotation"] = "KEEP"
+            op["/FileAnnotation"] = "KEEP"
+
+        childTypes = {'Project':['/Dataset', '/Image'], 
+                'Dataset':['/Image'],
+                'Image':[],
+                'Screen':['/Plate'],
+                'Plate':[],
+                'Well':[],
+                'Annotation':[] }
+        if obj_type not in childTypes:
+            raise AttributeError("""%s is not an object type. Must be: Project, Dataset, 
+                                Image, Screen, Plate, Well, Annotation""" % obj_type)
+        if not deleteChildren:
+            for c in childTypes[obj_type]:
+                op[c] = "KEEP"
+
+        return self.simpleDelete(obj_type, obj_ids, op)
+
+        
     def simpleDelete(self, otype, oids, op=dict()):
         """
-        Adds each object from the given list to command and then put them on delete queue,
-        keeping annotations by default
+        TODO: - deleteObjects should be the only delete method. simpleDelete should be removed and the code
+        ported to the deleteObjects method. 
         
         @param otype:   Type of object to delete. Can be Project, Dataset, 
                         Image, Screen, Plate, Well, Annotation
@@ -3011,99 +2828,28 @@ class _BlitzGateway (object):
     ###################
     # Searching stuff #
 
-
-    def searchImages (self, text, created=None):
+    def searchObjects(self, obj_types, text, created=None):
         """
-        Fulltext search on Images.
+        Search objects of type "Project", "Dataset", "Image", "Screen", "Plate"
+        Returns a list of results
         
+        @param obj_types:   E.g. ["Dataset", "Image"]
         @param text:        The text to search for
-        @type text:         String
-        @param created:     List or tuple of creation times. (start, stop)
-        @type created:      L{omero.rtime} list or tuple
-        @return:            List of Images
-        @rtype:             List of L{ImageWrapper}
-        """
-        
-        return self.simpleSearch(text=text,created=created, types=(ImageWrapper,))
-
-    def searchDatasets (self, text, created=None):
-        """
-        Fulltext search on Datasets.
-        
-        @param text:        The text to search for
-        @type text:         String
-        @param created:     List or tuple of creation times. (start, stop)
-        @type created:      L{omero.rtime} list or tuple
-        @return:            List of Datasets
-        @rtype:             List of L{DatasetWrapper}
-        """
-        
-        return self.simpleSearch(text=text, created=created, types=(DatasetWrapper,))
-
-    def searchProjects (self, text, created=None):
-        """
-        Fulltext search on Projects.
-        
-        @param text:        The text to search for
-        @type text:         String
-        @param created:     List or tuple of creation times. (start, stop)
-        @type created:      L{omero.rtime} list or tuple
-        @return:            List of Projects
-        @rtype:             List of L{ProjectWrapper}
-        """
-        
-        return self.simpleSearch(text=text, created=created, types=(ProjectWrapper,))
-
-    def searchScreens (self, text, created=None):
-        """
-        Fulltext search on Screens.
-        
-        @param text:        The text to search for
-        @type text:         String
-        @param created:     List or tuple of creation times. (start, stop)
-        @type created:      L{omero.rtime} list or tuple
-        @return:            List of Screens
-        @rtype:             List of L{ScreenWrapper}
-        """
-        
-        return self.simpleSearch(text=text, created=created, types=(ScreenWrapper,))
-
-    def searchPlates (self, text, created=None):
-        """
-        Fulltext search on Plates.
-        
-        @param text:        The text to search for
-        @type text:         String
-        @param created:     List or tuple of creation times. (start, stop)
-        @type created:      L{omero.rtime} list or tuple
-        @return:            List of Plates
-        @rtype:             List of L{PlateWrapper}
-        """
-        
-        return self.simpleSearch(text=text, created=created, types=(PlateWrapper,))
-
-    def simpleSearch (self, text, created=None, types=None):
-        """
-        Fulltext search on Projects, Datasets and Images. Used by other search methods above.
-        
-        @param text:        The text to search for
-        @type text:         String
-        @param created:     List or tuple of creation times. (start, stop)
-        @type created:      L{omero.rtime} list or tuple
-        @param types:       List or tuple of types to search for - E.g. Project, Dataset
-        @type types:        E.g. (L{ProjectWrapper}, L{DatasetWrapper})
-        @return:            List of search result wrapped objects
-        @rtype:             List of Object wrappers as specified in 'types'
-        
-        TODO: search other object types?
-        TODO: batch support.
+        @param created:     L{omero.rtime} list or tuple (start, stop)
+        @return:            List of Object wrappers. E.g. L{ImageWrapper}
         """
         if not text:
             return []
         if isinstance(text, UnicodeType):
             text = text.encode('utf8')
-        if types is None:
+        if obj_types is None:
             types = (ProjectWrapper, DatasetWrapper, ImageWrapper)
+        else:
+            def getWrapper(obj_type):
+                if obj_type.lower() not in ["project", "dataset", "image", "screen", "plate"]:
+                    raise AttributeError("%s not recognised. Can only search for 'Project', 'Dataset', 'Image', 'Screen', 'Plate'" % obj_type)
+                return KNOWN_WRAPPERS.get(obj_type.lower(), None)
+            types = [getWrapper(o) for o in obj_types]
         search = self.createSearchService()
         if created:
             search.onlyCreatedBetween(created[0], created[1]);
@@ -3121,6 +2867,7 @@ class _BlitzGateway (object):
                 timeit(searchProcessing)()
         search.close()
         return rv
+
 
 def safeCallWrap (self, attr, f): #pragma: no cover
     """
@@ -3437,6 +3184,13 @@ class AnnotationWrapper (BlitzObjectWrapper):
         """
         return type(a) == type(self) and self._obj.id == a._obj.id and self.getValue() == a.getValue() and self.getNs() == a.getNs()
 
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("Annotation")
+        """
+        return "select obj from Annotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
+        
     @classmethod
     def _register (klass, regklass):
         """
@@ -3448,7 +3202,7 @@ class AnnotationWrapper (BlitzObjectWrapper):
         klass.registry[regklass.OMERO_TYPE] = regklass
 
     @classmethod
-    def _wrap (klass, conn, obj, link=None):
+    def _wrap (klass, conn=None, obj=None, link=None):
         """
         Class method for creating L{AnnotationWrapper} subclasses based on the type of 
         annotation object, using previously registered mapping between OMERO types and wrapper classes
@@ -3462,6 +3216,8 @@ class AnnotationWrapper (BlitzObjectWrapper):
         @return:    Wrapped AnnotationWrapper object or None if obj.__class__ not registered
         @rtype:     L{AnnotationWrapper} subclass
         """
+        if obj == None:
+            return AnnotationWrapper()
         if obj.__class__ in klass.registry:
             kwargs = dict()
             if link is not None:
@@ -3560,6 +3316,13 @@ class FileAnnotationWrapper (AnnotationWrapper):
         if not self._obj.file.loaded:
             self._obj._file = self._conn.getQueryService().find('OriginalFile', self._obj.file.id.val)
 
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("FileAnnotation")
+        """
+        return "select obj from FileAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
+
     def getValue (self):
         """ Not implemented """
         pass
@@ -3653,6 +3416,13 @@ class TimestampAnnotationWrapper (AnnotationWrapper):
     
     OMERO_TYPE = TimestampAnnotationI
 
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("TimestampAnnotation")
+        """
+        return "select obj from TimestampAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
+
     def getValue (self):
         """
         Returns a datetime object of the timestamp in seconds
@@ -3689,6 +3459,13 @@ class BooleanAnnotationWrapper (AnnotationWrapper):
     
     OMERO_TYPE = BooleanAnnotationI
 
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("BooleanAnnotation")
+        """
+        return "select obj from BooleanAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
+
     def getValue (self):
         """
         Gets boolean value
@@ -3718,6 +3495,13 @@ class TagAnnotationWrapper (AnnotationWrapper):
     """
     
     OMERO_TYPE = TagAnnotationI
+
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("TagAnnotation")
+        """
+        return "select obj from TagAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
 
     def getValue (self):
         """ 
@@ -3750,6 +3534,13 @@ class CommentAnnotationWrapper (AnnotationWrapper):
     
     OMERO_TYPE = CommentAnnotationI
 
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("CommentAnnotation")
+        """
+        return "select obj from CommentAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+            "join fetch obj.details.creationEvent"
+
     def getValue (self):
         """ 
         Gets the value of the Comment
@@ -3780,6 +3571,13 @@ class LongAnnotationWrapper (AnnotationWrapper):
     """
     OMERO_TYPE = LongAnnotationI
 
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("LongAnnotation")
+        """
+        return "select obj from LongAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
+
     def getValue (self):
         """ 
         Gets the value of the Long annotation
@@ -3809,6 +3607,13 @@ class DoubleAnnotationWrapper (AnnotationWrapper):
     omero_model_DoubleAnnotationI class wrapper extends AnnotationWrapper.
     """
     OMERO_TYPE = DoubleAnnotationI
+
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("DoubleAnnotation")
+        """
+        return "select obj from DoubleAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
 
     def getValue (self):
         """ 
@@ -3844,6 +3649,13 @@ class TermAnnotationWrapper (AnnotationWrapper):
     only in 4.2+
     """
     OMERO_TYPE = TermAnnotationI
+
+    def _getQueryString(self):
+        """
+        Used for building queries in generic methods such as getObjects("TermAnnotation")
+        """
+        return "select obj from TermAnnotation obj join fetch obj.details.owner as owner join fetch obj.details.group "\
+                "join fetch obj.details.creationEvent"
 
     def getValue (self):
         """ 
@@ -3911,6 +3723,12 @@ class _ExperimenterWrapper (BlitzObjectWrapper):
                    'isAdmin': len(filter(lambda x: x.name.val == 'system', self._conn.getAdminService().containedGroups(self.getId()))) == 1,
                    })
         return rv
+
+    def _getQueryString(self):
+        """ 
+        Returns string for building queries, loading Experimenters only. 
+        """
+        return "select distinct obj from Experimenter as obj"
 
     def getRawPreferences (self):
         """
@@ -4136,6 +3954,15 @@ class _ExperimenterGroupWrapper (BlitzObjectWrapper):
         if self._conn.getEventContext().groupId in self._conn.getEventContext().leaderOfGroups:
             return True
         return False
+        
+    def _getQueryString(self):
+        """ 
+        Returns string for building queries, loading Experimenters for each group. 
+        """
+        query = "select distinct obj from ExperimenterGroup as obj left outer join fetch obj.groupExperimenterMap " \
+            "as map left outer join fetch map.child e"
+        return query
+        
 
 ExperimenterGroupWrapper = _ExperimenterGroupWrapper
 
@@ -4354,6 +4181,16 @@ _
         """
         return None
     
+    def _getQueryString(self):
+        """
+        Returns a query string for constructing custom queries, loading the screen for each plate.
+        """
+        query = "select obj from Plate obj join fetch obj.details.owner join fetch obj.details.group "\
+              "join fetch obj.details.creationEvent "\
+              "left outer join fetch obj.screenLinks spl " \
+              "left outer join fetch spl.parent sc"
+        return query
+
 PlateWrapper = _PlateWrapper
 
 class _WellWrapper (BlitzObjectWrapper):
@@ -4823,8 +4660,9 @@ class _ChannelWrapper (BlitzObjectWrapper):
         
         if self._obj.logicalChannel is not None:
             return LogicalChannelWrapper(self._conn, self._obj.logicalChannel)
-    
-    def getEmissionWave (self):
+
+
+    def getLabel (self):
         """
         Returns the logical channel name, emission wave or index. The first that is not null
         in the described order.
@@ -4832,7 +4670,7 @@ class _ChannelWrapper (BlitzObjectWrapper):
         @return:    The logical channel string representation
         @rtype:     String
         """
-        
+
         lc = self.getLogicalChannel()
         rv = lc.name
         if rv is None:
@@ -4840,6 +4678,32 @@ class _ChannelWrapper (BlitzObjectWrapper):
         if rv is None:
             rv = self._idx
         return unicode(rv)
+
+
+    def getName (self):
+        """
+        Returns the logical channel name or None
+
+        @return:    The logical channel string representation
+        @rtype:     String
+        """
+        
+        lc = self.getLogicalChannel()
+        rv = lc.name
+        if rv is not None:
+            return unicode(rv)
+
+
+    def getEmissionWave (self):
+        """
+        Returns the emission wave or None.
+
+        @return:    The logical channel string representation
+        @rtype:     int
+        """
+
+        lc = self.getLogicalChannel()
+        return lc.emissionWave
 
     def getColor (self):
         """
@@ -5135,14 +4999,17 @@ class _ImageWrapper (BlitzObjectWrapper):
         @rtype:     Boolean
         """
         
-        self._loadPixels()
-        if self._re is None:
-            if self._obj.sizeOfPixels() < 1:
-                return False
-            if self._pd is None:
-                self._pd = omero.romio.PlaneDef(self.PLANEDEF)
-            self._re = self._prepareRE()
-        return self._re is not None
+        try:
+            self._loadPixels()
+            if self._re is None:
+                if self._obj.sizeOfPixels() < 1:
+                    return False
+                if self._pd is None:
+                    self._pd = omero.romio.PlaneDef(self.PLANEDEF)
+                self._re = self._prepareRE()
+            return self._re is not None
+        except:
+            return None
 
     def resetRDefs (self):
         logger.debug('resetRDefs')
@@ -5729,9 +5596,9 @@ class _ImageWrapper (BlitzObjectWrapper):
         """
         return self.getRenderingModel().value.lower() == 'greyscale'
 
-
+    
     @assert_re
-    def renderJpegRegion (self, z, t, x, y, width, height, compression=0.9):
+    def renderJpegRegion (self, z, t, x, y, width, height, level=None, compression=0.9):
         """
         Return the data from rendering a region of an image plane.
         NB. Projection not supported by the API currently. 
@@ -5756,6 +5623,9 @@ class _ImageWrapper (BlitzObjectWrapper):
         regionDef.height = height
         self._pd.region = regionDef
         try:
+            if level is not None:
+                self._re.setResolutionLevel(level)
+                print self._re.getResolutionLevel()
             if compression is not None:
                 try:
                     self._re.setCompressionLevel(float(compression))
@@ -6054,7 +5924,7 @@ class _ImageWrapper (BlitzObjectWrapper):
         return rv
 
     def _renderSplit_channelLabel (self, channel):
-        return str(channel.getEmissionWave())
+        return str(channel.getLabel())
 
     def renderSplitChannelImage (self, z, t, compression=0.9, border=2):
         """
@@ -6502,7 +6372,7 @@ class _DetectorSettingsWrapper (BlitzObjectWrapper):
               'gain',
               'offsetValue',
               'readOutRate',
-              'binning',
+              'binning|BinningWrapper',
               'detector|DetectorWrapper',
               'version')
 
@@ -6510,6 +6380,16 @@ class _DetectorSettingsWrapper (BlitzObjectWrapper):
         self.OMERO_CLASS = 'DetectorSettings'
 
 DetectorSettingsWrapper = _DetectorSettingsWrapper
+
+class _BinningWrapper (BlitzObjectWrapper):
+    """
+    omero_model_BinningI class wrapper extends BlitzObjectWrapper.
+    """
+
+    def __bstrap__ (self):
+        self.OMERO_CLASS = 'Binning'
+
+BinningWrapper = _BinningWrapper
 
 class _DetectorWrapper (BlitzObjectWrapper):
     """
@@ -7022,6 +6902,18 @@ def refreshWrappers ():
                   "image":ImageWrapper,
                   "screen":ScreenWrapper,
                   "plate":PlateWrapper,
-                  "well":WellWrapper})
-        
+                  "well":WellWrapper,
+                  "experimenter":ExperimenterWrapper,
+                  "experimentergroup":ExperimenterGroupWrapper,
+                  "commentannotation":CommentAnnotationWrapper,
+                  "tagannotation":TagAnnotationWrapper,
+                  "longannotation":LongAnnotationWrapper,
+                  "booleanannotation":BooleanAnnotationWrapper,
+                  "fileannotation":FileAnnotationWrapper,
+                  "doubleannotation":DoubleAnnotationWrapper,
+                  "termannotation":TermAnnotationWrapper,
+                  "timestampannotation":TimestampAnnotationWrapper,
+                  "annotation":AnnotationWrapper._wrap})    # allows for getObjects("Annotation", ids)
+
 refreshWrappers()
+
