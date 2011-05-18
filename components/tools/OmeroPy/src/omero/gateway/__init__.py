@@ -2673,8 +2673,8 @@ class _BlitzGateway (object):
             types = (ProjectWrapper, DatasetWrapper, ImageWrapper)
         else:
             def getWrapper(obj_type):
-                if obj_type.lower() not in ["project", "dataset", "image", "screen", "plate"]:
-                    raise AttributeError("%s not recognised. Can only search for 'Project', 'Dataset', 'Image', 'Screen', 'Plate'" % obj_type)
+                if obj_type.lower() not in ["project", "dataset", "image", "screen", "plate", "well"]:
+                    raise AttributeError("%s not recognised. Can only search for 'Project', 'Dataset', 'Image', 'Screen', 'Plate', 'Well'" % obj_type)
                 return KNOWN_WRAPPERS.get(obj_type.lower(), None)
             types = [getWrapper(o) for o in obj_types]
         search = self.createSearchService()
@@ -2739,14 +2739,14 @@ def safeCallWrap (self, attr, f): #pragma: no cover
                 logger.debug("Ice.Exception (2) on safe call %s(%s,%s)" % (attr, str(args), str(kwargs)))
                 logger.debug(traceback.format_exc())
                 try:
-                    if self._conn.c.sf.getSessionService().getReferenceCount(self._conn._sessionUuid) > 0:
-                        # Recreate connection
-                        self._connect()
-                        logger.debug('last try for %s' % attr)
-                        # Last try, don't catch exception
-                        func = getattr(self._obj, attr)
-                        return func(*args, **kwargs)
-                    raise Ice.ConnectionLostException()
+#                    if self._conn.c.sf.getSessionService().getReferenceCount(self._conn._sessionUuid) > 0:
+                    # Recreate connection
+                    self._connect()
+                    logger.debug('last try for %s' % attr)
+                    # Last try, don't catch exception
+                    func = getattr(self._obj, attr)
+                    return func(*args, **kwargs)
+#                    raise Ice.ConnectionLostException()
                 except Ice.ObjectNotExistException:
                     raise Ice.ConnectionLostException()
                 except:
@@ -4585,8 +4585,10 @@ class _PixelsWrapper (BlitzObjectWrapper):
                 remappedPlane = numpy.array(convertedPlane, numpyType)
                 remappedPlane.resize(sizeY, sizeX)
                 yield remappedPlane
-        finally:
+        except:
             rawPixelsStore.close()
+            raise
+        rawPixelsStore.close()
 
     def getPlane (self, theZ=0, theC=0, theT=0):
         """
