@@ -8,6 +8,7 @@
 
 package omero.util;
 
+import static omero.rtypes.rbool;
 import static omero.rtypes.rdouble;
 import static omero.rtypes.rfloat;
 import static omero.rtypes.rint;
@@ -52,6 +53,7 @@ import omero.ApiUsageException;
 import omero.RTime;
 import omero.RType;
 import omero.ServerError;
+import omero.model.PermissionsI;
 import omero.romio.BlueBand;
 import omero.romio.GreenBand;
 import omero.romio.RedBand;
@@ -160,9 +162,46 @@ public class IceMapper extends ome.util.ModelMapper implements
 
     };
 
+    public final static ReturnMapping OBJECTARRAY_TO_RTYPESEQ = new ReturnMapping() {
+        public Object mapReturnValue(IceMapper mapper, Object value)
+        throws Ice.UserException {
+
+            if (value == null) {
+                return null;
+            }
+
+            Object[] objArr = (Object[]) value;
+            List<RType> rv = new ArrayList<RType>();
+            for (Object obj : objArr) {
+                rv.add((RType) OBJECT_TO_RTYPE.mapReturnValue(mapper, obj));
+            }
+
+            return rv;
+        }
+    };
+
+    @SuppressWarnings("unchecked")
+    public final static ReturnMapping LISTOBJECTARRAY_TO_RTYPESEQSEQ = new ReturnMapping() {
+        public Object mapReturnValue(IceMapper mapper, Object value)
+        throws Ice.UserException {
+
+            if (value == null) {
+                return null;
+            }
+
+            List<Object[]> listObjArr = (List<Object[]>) value;
+            List<List<RType>> rv = new ArrayList<List<RType>>();
+            for (Object[] objs : listObjArr) {
+                rv.add((List<RType>)OBJECTARRAY_TO_RTYPESEQ.mapReturnValue(mapper, objs));
+            }
+
+            return rv;
+        }
+    };
+
     public final static ReturnMapping OBJECT_TO_RTYPE = new ReturnMapping() {
         public Object mapReturnValue(IceMapper mapper, Object value)
-                throws Ice.UserException {
+        throws Ice.UserException {
             return mapper.toRType(value);
         }
     };
@@ -258,6 +297,26 @@ public class IceMapper extends ome.util.ModelMapper implements
                     Object v = map.get(k);
                     Object kr = PRIMITIVE.mapReturnValue(mapper, k);
                     Object vr = FILTERABLE_COLLECTION.mapReturnValue(mapper, v);
+                    rv.put(kr, vr);
+                }
+                return rv;
+            }
+        }
+    };
+
+    public final static ReturnMapping RTYPEDICT = new ReturnMapping() {
+
+        public Object mapReturnValue(IceMapper mapper, Object value)
+                throws Ice.UserException {
+            if (value == null) {
+                return null;
+            } else {
+                Map map = (Map) value;
+                Map rv = new HashMap();
+                for (Object k : map.keySet()) {
+                    Object v = map.get(k);
+                    Object kr = PRIMITIVE.mapReturnValue(mapper, k);
+                    Object vr = OBJECT_TO_RTYPE.mapReturnValue(mapper, v);
                     rv.put(kr, vr);
                 }
                 return rv;
@@ -371,6 +430,10 @@ public class IceMapper extends ome.util.ModelMapper implements
             return null;
         } else if (o instanceof RType) {
             return (RType) o;
+        } else if (o instanceof Boolean) {
+            Boolean b = (Boolean) o;
+            omero.RBool bool = rbool(b.booleanValue());
+            return bool;
         } else if (o instanceof Date) {
             Date date = (Date) o;
             omero.RTime time = rtime(date.getTime());
@@ -401,14 +464,27 @@ public class IceMapper extends ome.util.ModelMapper implements
             omero.RObject robj = robject(om);
             return robj;
         } else if (o instanceof Collection) {
-            return rlist(map((Collection) o));
+            List<RType> l = new ArrayList<RType>();
+            for (Object i : (Collection) o) {
+                l.add(toRType(i));
+            }
+            return rlist(l);
         } else if (o instanceof Map) {
-            return rmap(map((Map) o));
+            Map<?, ?> mIn = (Map) o;
+            Map<String, RType> mOut = new HashMap<String, RType>();
+            for (Object k : mIn.keySet()) {
+                if (!(k instanceof String)) {
+                    throw new omero.ValidationException(
+                            null, null, "Map key not a string");
+                }
+                mOut.put((String) k, toRType(mIn.get(k)));
+            }
+            return rmap(mOut);
         } else if (o instanceof omero.Internal) {
             return rinternal((omero.Internal) o);
         } else {
             throw new ApiUsageException(null, null,
-                    "Unsupported conversion to rtype from:" + o);
+                    "Unsupported conversion to rtype from " + o.getClass().getName() + ":" + o);
         }
     }
 
@@ -471,6 +547,13 @@ public class IceMapper extends ome.util.ModelMapper implements
         return b;
     }
 
+    /**
+     * Converts the passed Ice Object and returns the converted object.
+     * 
+     * @param def The object to convert
+     * @return See above.
+     * @throws omero.ApiUsageException Thrown if the slice is unknown.
+     */
     public static PlaneDef convert(omero.romio.PlaneDef def)
             throws omero.ApiUsageException {
         PlaneDef pd = new PlaneDef(def.slice, def.t);
@@ -678,10 +761,10 @@ public class IceMapper extends ome.util.ModelMapper implements
         if (p == null) {
             return null;
         }
-        return new omero.model.PermissionsI(p.toString());
+        return new PermissionsI(p.toString());
     }
 
-    public ome.model.internal.Permissions convert(omero.model.Permissions p) {
+    public static ome.model.internal.Permissions convert(omero.model.Permissions p) {
         if (p == null) {
             return null;
         }
@@ -820,7 +903,14 @@ public class IceMapper extends ome.util.ModelMapper implements
         if (map == null) {
             return null;
         }
+
+        if (target2model.containsKey(map)) {
+            return (Map) target2model.get(map);
+        }
+
         Map<Object, Object> target = new HashMap<Object, Object>();
+        target2model.put(map, target);
+
         try {
             for (Object key : map.keySet()) {
                 Object value = map.get(key);
@@ -951,8 +1041,6 @@ public class IceMapper extends ome.util.ModelMapper implements
             return reverseArray((List) arg, p);
         } else if (p.equals(Class.class)) {
             return omeroClass((String) arg, true);
-        } else if (ome.model.internal.Permissions.class.isAssignableFrom(p)) {
-            return convert((ome.model.internal.Permissions) arg);
         } else if (ome.model.internal.Details.class.isAssignableFrom(p)) {
             return reverse((ModelBased) arg);
         } else if (ome.model.IObject.class.isAssignableFrom(p)) {
@@ -1040,17 +1128,19 @@ public class IceMapper extends ome.util.ModelMapper implements
         // First we give registered handlers a chance to convert the message,
         // if that doesn't succeed, then we try either manually, or just
         // wrap the exception in an InternalException
-        try {
-            ConvertToBlitzExceptionMessage ctbem = new ConvertToBlitzExceptionMessage(
-                    this, t);
-            ctx.publishMessage(ctbem);
-            if (ctbem.to != null) {
-                t = ctbem.to;
+        if (ctx != null) {
+            try {
+                ConvertToBlitzExceptionMessage ctbem =
+                    new ConvertToBlitzExceptionMessage(this, t);
+                ctx.publishMessage(ctbem);
+                if (ctbem.to != null) {
+                    t = ctbem.to;
+                }
+            } catch (Throwable handlerT) {
+                // Logging the output, but we shouldn't worry the user
+                // with a failing handler
+                log.error("Exception handler failure", handlerT);
             }
-        } catch (Throwable handlerT) {
-            // Logging the output, but we shouldn't worry the user
-            // with a failing handler
-            log.error("Exception handler failure", handlerT);
         }
 
         Class c = t.getClass();
