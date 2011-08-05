@@ -275,8 +275,8 @@ public abstract class AbstractServantTest extends TestCase {
 
     protected long makeImage() throws Exception, FileNotFoundException {
         long pixels = makePixels();
-        ServiceFactory _sf = new InterceptingServiceFactory(this.sf, user.login);
-        return user_sf.getQueryService(null).findByQuery("select i from Image i join i.pixels p " +
-			"where p.id = " + pixels, null).getId().getValue();
+        ServiceFactory sf = new InterceptingServiceFactory(this.sf, user.login);
+        return sf.getQueryService().findByQuery("select i from Image i join i.pixels p " +
+			"where p.id = " + pixels, null).getId();
     }
 }
