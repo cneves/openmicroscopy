@@ -407,8 +407,11 @@ public class ExporterI extends AbstractAmdServant implements
             RandomAccessInputStream inputStream = null;
             try {
                 Image image = retrieve.getImage(0);
-                Dataset dataset = image.linkedDatasetList().get(0);
-                Project project = dataset.linkedProjectList().get(0);
+                Project project = retrieve.projectsByImage.get(image.getId().getValue());
+                if (project == null) {
+                    Dataset dataset = image.linkedDatasetList().get(0);
+                    project = dataset.linkedProjectList().get(0);
+                }
                 CommentAnnotation citation = null;
                 CommentAnnotation title = null;
                 CommentAnnotation authors = null;

@@ -96,6 +96,13 @@ public class OmeroMetadata implements MetadataRetrieve {
 
     // -- State --
 
+    /**
+     * Map from image ids to projects which is filled when a project
+     * is only linked to an image via a screen.
+     */
+    final /* pkg-private */  Map<Long, ome.model.containers.Project> projectsByImage =
+        new HashMap<Long, ome.model.containers.Project>();
+
     private final List<Image> imageList = new ArrayList<Image>();
     private final List<Dataset> datasetList = new ArrayList<Dataset>();
     private final List<Project> projectList = new ArrayList<Project>();
@@ -204,12 +211,18 @@ public class OmeroMetadata implements MetadataRetrieve {
                 qb.join("p.channels",       "c",    false, true);
                 qb.join("c.logicalChannel", "l",    false, true);
                 // Extra goodies for JCB annotations
-                qb.join("i.datasetLinks",   "d_link", false, true);
-                qb.join("d_link.parent",    "d", false, true);
-                qb.join("d.projectLinks",   "p_link", false, true);
-                qb.join("p_link.parent",    "p",    false, true);
+                qb.join("i.datasetLinks",   "d_link",   true, true);
+                qb.join("d_link.parent",    "d",        true, true);
+                qb.join("d.projectLinks",   "p_link",   true, true);
+                qb.join("p_link.parent",    "p",        true, true);
                 qb.join("p.annotationLinks","p_a_link", true, true);
-                qb.join("p_a_link.child",   "p_a", true, true);
+                qb.join("p_a_link.child",   "p_a",      true, true);
+                // Extra goodies for JCB HCS
+                qb.join("i.wellSamples",     "ws",       true, true);
+                qb.join("ws.well",           "well",     true, true);
+                qb.join("well.plate",        "plate",    true, true);
+                qb.join("plate.screenLinks", "s_link",   true, true);
+                qb.join("s_link.parent",     "screen",   true, true);
                 qb.where();
                 qb.and("i.id = " + id);
                 ome.model.core.Image _i =(ome.model.core.Image) qb.query(session).uniqueResult();
@@ -217,6 +230,29 @@ public class OmeroMetadata implements MetadataRetrieve {
                     throw new ApiUsageException("Cannot load image: " + id);
                 }
                 lookups.put(image, _i);
+                // Now load the screen project if available
+                // Needs to be kept in sync with JcbBridge and JournalI
+                if (_i.sizeOfWellSamples() > 0) {
+                    qb = new QueryBuilder();
+                    qb.select("prj").from("Project", "prj");
+                    qb.join("prj.annotationLinks", "pal", true, true);
+                    qb.join("pal.child", "pann", true, true);
+                    qb.where();
+                    qb.and("prj.name = :uuid");
+
+                    ome.model.screen.WellSample ws = _i.unmodifiableWellSamples().iterator().next();
+                    ome.model.screen.Well w = ws.getWell();
+                    ome.model.screen.Plate pl = w.getPlate();
+                    ome.model.screen.Screen sc = pl.linkedScreenList().get(0);
+                    org.hibernate.Query query = qb.query(session);
+                    query.setString("uuid", sc.getDescription());
+                    ome.model.containers.Project prj = (ome.model.containers.Project) query.uniqueResult();
+                    if (prj == null) {
+                        throw new ome.conditions.ValidationException("No project found named: " + sc.getDescription());
+                    }
+                    projectsByImage.put(_i.getId(), prj);
+                }
+
                 // Now load instrument if available
                 if (_i.getInstrument() != null) {
                     qb = new QueryBuilder();
