@@ -100,8 +100,8 @@ public class OmeroMetadata implements MetadataRetrieve {
      * Map from image ids to projects which is filled when a project
      * is only linked to an image via a screen.
      */
-    final /* pkg-private */  Map<Long, ome.model.containers.Project> projectsByImage =
-        new HashMap<Long, ome.model.containers.Project>();
+    final /* pkg-private */  Map<Long, Project> projectsByImage =
+        new HashMap<Long, Project>();
 
     private final List<Image> imageList = new ArrayList<Image>();
     private final List<Dataset> datasetList = new ArrayList<Dataset>();
@@ -192,6 +192,7 @@ public class OmeroMetadata implements MetadataRetrieve {
 
     public void initialize(org.hibernate.Session session) {
 
+        final IceMapper mapper = new IceMapper();
         Map<Image, ome.model.core.Image> lookups = new HashMap<Image, ome.model.core.Image>();
         Map<Image, Image> replacements = new HashMap<Image, Image>();
         for (Image image : imageList) {
@@ -250,7 +251,9 @@ public class OmeroMetadata implements MetadataRetrieve {
                     if (prj == null) {
                         throw new ome.conditions.ValidationException("No project found named: " + sc.getDescription());
                     }
-                    projectsByImage.put(_i.getId(), prj);
+                    // See image replacement code below
+                    Project replacement = (Project) mapper.map(new ProxyCleanupFilter().filter("", prj));
+                    projectsByImage.put(_i.getId(), replacement);
                 }
 
                 // Now load instrument if available
@@ -271,13 +274,12 @@ public class OmeroMetadata implements MetadataRetrieve {
             }
         }
         session.clear();
-        
-        IceMapper mapper = new IceMapper();
+
         for (Image image : lookups.keySet()) {
             Image replacement = (Image) mapper.map(new ProxyCleanupFilter().filter("", lookups.get(image)));
             replacements.put(image, replacement);
         }
-        
+
         List<Image> newImages = new ArrayList<Image>();
         for (int i = 0; i < imageList.size(); i++) {
             Image image = imageList.get(i);
