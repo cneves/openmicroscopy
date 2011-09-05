@@ -483,13 +483,11 @@ class WebGatewayCache (object):
         @param iid:             image ID
         @param size:            size of the thumbnail - tuple. E.g. (100,)
         """
-        pre = str(iid)[:-4]
-        if len(pre) == 0:
-            pre = '0'
+        
         if size is not None and len(size):
-            return 'thumb_%s/%s/%s/%s' % (client_base, pre, str(iid), 'x'.join([str(x) for x in size]))
+            return 'thumb_%s/%s/%s' % (client_base, str(iid), 'x'.join([str(x) for x in size]))
         else:
-            return 'thumb_%s/%s/%s' % (client_base, pre, str(iid))
+            return 'thumb_%s/%s' % (client_base, str(iid))
 
     def setThumb (self, r, client_base, iid, obj, size=()):
         """
