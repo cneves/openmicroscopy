@@ -1948,8 +1948,8 @@ class _BlitzGateway (object):
         @rtype: omero.gateway.ProxyObjectWrapper
         @return: The proxy wrapper of the thumbnail store
         """
-        
-        return self._proxies['thumbs']
+        return ProxyObjectWrapper(self, 'createThumbnailStore')
+        #return self._proxies['thumbs']
     
     def createSearchService (self):
         """
@@ -5433,6 +5433,7 @@ class _ImageWrapper (BlitzObjectWrapper):
                 else:
                     pos = None
             if self.getProjection() != 'normal':
+                tb.close()
                 return self._getProjectedThumbnail(size, pos)
             if len(size) == 1:
                 if pos is None:
@@ -5448,6 +5449,7 @@ class _ImageWrapper (BlitzObjectWrapper):
             if pos is not None:
                 args = list(pos) + args
             rv = thumb(*args)
+            tb.close()
             return rv
         except Exception: #pragma: no cover
             logger.error(traceback.print_exc())

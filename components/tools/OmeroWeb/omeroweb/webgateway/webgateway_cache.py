@@ -258,17 +258,17 @@ class FileCache(CacheBase):
             except ValueError: #pragma: nocover
                 logger.error('Counting cache entries failed')
         # Check for space usage
-        if self._max_size:
-            try:
-                x = self._du()
-                if x >= self._max_size:
-                    if not _on_retry:
-                        self._purge()
-                        return self._full(True)
-                    logger.warn('caching limits reached on %s: max size %d' % (self._dir, self._max_size))
-                    return True
-            except ValueError: #pragma: nocover
-                logger.error('Counting cache size failed')
+#        if self._max_size:
+#            try:
+#                x = self._du()
+#                if x >= self._max_size:
+#                    if not _on_retry:
+#                        self._purge()
+#                        return self._full(True)
+#                    logger.warn('caching limits reached on %s: max size %d' % (self._dir, self._max_size))
+#                    return True
+#            except ValueError: #pragma: nocover
+#                logger.error('Counting cache size failed')
         return False
 
     def _purge (self):
