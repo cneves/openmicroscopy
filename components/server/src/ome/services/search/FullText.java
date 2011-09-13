@@ -48,6 +48,8 @@ import org.springframework.util.Assert;
 public class FullText extends SearchAction {
 
     public final static String ALL_PROJECTIONS = "__ALL_PROJECTIONS";
+    
+    public final static String TOTAL_SIZE = "TOTAL_SIZE";
 
     private static final Log log = LogFactory.getLog(FullText.class);
 
@@ -238,7 +240,7 @@ public class FullText extends SearchAction {
                 throw new ApiUsageException(String.format(ticket975, object
                         .getClass(), cls));
             } else {
-                object.putAt("TOTAL_SIZE", totalSize);
+                object.putAt(TOTAL_SIZE, totalSize);
                 object.putAt(ProjectionConstants.SCORE, scores.get(object
                         .getId()));
                 object.putAt(ALL_PROJECTIONS, projections.get(object.getId()));
@@ -260,5 +262,29 @@ public class FullText extends SearchAction {
         };
         Collections.sort(check975, cmp);
         return check975;
+    }
+    
+    public Float getScore(IObject object) {
+        Object o = object.retrieve(ProjectionConstants.SCORE);
+        if (o instanceof Float) {
+            return (Float) o;
+        }
+        return null;
+    }
+    
+    public Integer getTotalSize(IObject object) {
+        Object o = object.retrieve(TOTAL_SIZE);
+        if (o instanceof Integer) {
+            return (Integer) o;
+        }
+        return null;
+    }
+    
+    public Object[] getProjections(IObject object) {
+        Object o = object.retrieve(ALL_PROJECTIONS);
+        if (o instanceof Object[]) {
+            return (Object[]) o;
+        }
+        return null;
     }
 }
