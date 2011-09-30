@@ -500,9 +500,9 @@ class WebGatewayCache (object):
         if len(pre) == 0:
             pre = '0'
         if size is not None and len(size):
-            return 'thumb_copy/%s/%s/%s' % (pre, str(iid), 'x'.join([str(x) for x in size]))
+            return 'thumb_%s/%s/%s/%s' % (client_base, pre, str(iid), 'x'.join([str(x) for x in size]))
         else:
-            return 'thumb_copy/%s/%s' % (pre, str(iid))
+            return 'thumb_%s/%s/%s' % (client_base, pre, str(iid))
 
     def setThumb (self, r, client_base, iid, obj, size=()):
         """
