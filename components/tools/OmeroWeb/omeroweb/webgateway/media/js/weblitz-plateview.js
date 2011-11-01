@@ -75,7 +75,7 @@ jQuery._WeblitzPlateview = function (container, options) {
 		  tr.append('<td style="width:'+opts.width+'px;height:'+opts.height+'px;line-height:'+opts.height+'px;"><div class="placeholder">&nbsp;</div></td>');
 	      } else {
                   data.grid[i][j]._wellpos = data.rowlabels[i]+data.collabels[j];
-		  var td = $('<td style="width:'+opts.width+'px;height:'+opts.height+'px;" id="'+thisid+'-well-'+data.grid[i][j].wellId+'"><div class="waiting"></div><img class="loading" src="'+ data.grid[i][j].thumb_url+'"></td>');
+		  var td = $('<td style="width:'+opts.width+'px;height:'+opts.height+'px;" id="'+thisid+'-well-'+data.grid[i][j].wellId+'"><div class="waiting"></div><img class="loading" src="'+ data.grid[i][j].thumb_url+'" name="'+(data.rowlabels[i] + data.collabels[j])+'"></td>');
 		  $('img', td)
 		      .click(tclick(data.grid[i][j]))
 		      .load(function() { 
