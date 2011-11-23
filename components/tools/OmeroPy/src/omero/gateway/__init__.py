@@ -2802,15 +2802,19 @@ def safeCallWrap (self, attr, f): #pragma: no cover
         except Ice.Exception, x:
             logger.debug('wrapped ' + f.func_name)
             logger.debug(x.__dict__)
-            if hasattr(x, 'serverExceptionClass') and x.serverExceptionClass == 'ome.conditions.InternalException':
-                if x.message.find('java.lang.NullPointerException') > 0:
-                    logger.debug("NullPointerException, bailing out")
+            if hasattr(x, 'serverExceptionClass'):
+                if x.serverExceptionClass == 'ome.conditions.InternalException':
+                    if x.message.find('java.lang.NullPointerException') > 0:
+                        logger.debug("NullPointerException, bailing out")
+                        raise
+                    elif x.message.find('Session is dirty') >= 0:
+                        logger.debug("Session is dirty, bailing out")
+                        raise
+                    else:
+                        logger.debug(x.message)
+                elif x.serverExceptionClass == 'loci.formats.FormatException':
+                    logger.error(x.message)
                     raise
-                elif x.message.find('Session is dirty') >= 0:
-                    logger.debug("Session is dirty, bailing out")
-                    raise
-                else:
-                    logger.debug(x.message)
             logger.debug("exception caught, first time we back off for 10 secs")
             logger.debug(traceback.format_exc())
             #time.sleep(10)

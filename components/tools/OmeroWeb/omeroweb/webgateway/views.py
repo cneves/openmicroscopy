@@ -736,6 +736,8 @@ def render_ome_tiff (request, ctx, cid, server_id=None, _conn=None, **kwargs):
             raise Http404
         imgs.append(obj)
 
+    logger.info('renderOmeTiff; ctx=%s; ctxid=%s; imgcnt=%d' % (ctx, str(cid), len(imgs)))
+
     if len(imgs) == 1:
         obj = imgs[0]
         key = '_'.join((str(x.getId()) for x in obj.getAncestry())) + '_' + str(obj.getId()) + '_ome_tiff'
@@ -774,17 +776,29 @@ def render_ome_tiff (request, ctx, cid, server_id=None, _conn=None, **kwargs):
             if fobj is None:
                 fobj = StringIO()
             zobj = zipfile.ZipFile(fobj, 'w', zipfile.ZIP_STORED)
+            cnt = 0
             for obj in imgs:
                 tiff_data = webgateway_cache.getOmeTiffImage(request, server_id, obj)
                 if tiff_data is None:
-                    tiff_data = obj.exportOmeTiff()
+                    try:
+                        tiff_data = obj.exportOmeTiff()
+                        cnt += 1
+                    except:
+                        logger.debug('Failed to export image (3)', exc_info=True)
+                        tiff_data = None
                     if tiff_data is None:
                         continue
                     webgateway_cache.setOmeTiffImage(request, server_id, obj, tiff_data)
+                else:
+                    cnt += 1
                 zobj.writestr(str(obj.getId()) + '-'+obj.getName() + '.ome.tiff', tiff_data)
             zobj.close()
+            if cnt == 0:
+                webgateway_tempfile.abort(fpath)
+                raise Http404
             if fpath is None:
                 zip_data = fobj.getvalue()
+                fobj.close()
                 rsp = HttpResponse(zip_data, mimetype='application/zip')
                 rsp['Content-Disposition'] = 'attachment; filename="%s.zip"' % name
                 rsp['Content-Length'] = len(zip_data)
