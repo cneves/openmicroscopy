@@ -81,6 +81,7 @@ import org.openmicroscopy.shoola.agents.util.browser.TreeImageSet;
 import org.openmicroscopy.shoola.agents.util.browser.TreeImageTimeSet;
 import org.openmicroscopy.shoola.agents.util.browser.TreeViewerTranslator;
 import org.openmicroscopy.shoola.agents.util.ui.EditorDialog;
+import org.openmicroscopy.shoola.agents.util.ui.ScriptingDialog;
 import org.openmicroscopy.shoola.agents.util.EditorUtil;
 import org.openmicroscopy.shoola.agents.util.DataObjectRegistration;
 import org.openmicroscopy.shoola.agents.util.SelectionWizard;
@@ -159,6 +160,32 @@ class TreeViewerComponent
 	
 	/** The dialog presenting the list of available users. */
 	private UserManagerDialog	switchUserDialog;
+	
+	/** The dialog displaying the selected script.*/
+	private ScriptingDialog     scriptDialog;
+	
+	/**
+	 * Returns the name corresponding the specified object.
+	 * 
+	 * @param object The object to handle.
+	 * @return See above.
+	 */
+	private String getObjectType(Object object)
+	{
+		if (object instanceof DatasetData) return "dataset";
+		else if (object instanceof ProjectData) return "project";
+		else if (object instanceof GroupData) return "group";
+		else if (object instanceof ScreenData) return "screen";
+		else if (object instanceof PlateData) return "plate";
+		else if (object instanceof ImageData) return "image";
+		else if (object instanceof TagAnnotationData) {
+			TagAnnotationData tag = (TagAnnotationData) object;
+			if (TagAnnotationData.INSIGHT_TAGSET_NS.equals(tag.getNameSpace()))
+				return "tagSet";
+			return "tag";
+		}
+		return "item";
+	}
 	
 	/**
 	 * Downloads the files.
@@ -1379,6 +1406,14 @@ class TreeViewerComponent
 			case CREATE_MENU_ADMIN:
 			case PERSONAL_MENU:
 			case CREATE_MENU_SCREENS:
+				break;
+			case AVAILABLE_SCRIPTS_MENU:
+				if (model.getAvailableScripts() == null) {
+					model.loadScripts(p);
+					firePropertyChange(SCRIPTS_LOADING_PROPERTY,
+							Boolean.valueOf(false), Boolean.valueOf(true));
+					return;
+				}
 				break;
 			default:
 				throw new IllegalArgumentException("Menu not supported.");
@@ -3538,7 +3573,138 @@ class TreeViewerComponent
 			}
 			model.fireDataSaving(data, images);
 		}
-		
+	}
+
+	/** 
+	 * Implemented as specified by the {@link TreeViewer} interface.
+	 * @see TreeViewer#setAvailableScripts(List, Point)
+	 */
+	public void setAvailableScripts(List scripts, Point location)
+	{
+		if (model.getState() == DISCARDED) return;
+		model.setAvailableScripts(scripts);
+		firePropertyChange(SCRIPTS_LOADED_PROPERTY,
+				Boolean.valueOf(false), Boolean.valueOf(true));
+		if (location != null)
+			view.showMenu(AVAILABLE_SCRIPTS_MENU, null, location);
+	}
+
+	/** 
+	 * Implemented as specified by the {@link TreeViewer} interface.
+	 * @see TreeViewer#loadScript(long)
+	 */
+	public void loadScript(long scriptID)
+	{
+		if (scriptID < 0) return;
+		model.loadScript(scriptID);
+		firePropertyChange(SCRIPTS_LOADING_PROPERTY, 
+				Boolean.valueOf(false), Boolean.valueOf(true));
+	}
+
+	/** 
+	 * Implemented as specified by the {@link TreeViewer} interface.
+	 * @see TreeViewer#setScript(ScriptObject)
+	 */
+	public void setScript(ScriptObject script)
+	{
+		firePropertyChange(SCRIPTS_LOADED_PROPERTY, 
+				Boolean.valueOf(false), Boolean.valueOf(true));
+		if (script == null) return;
+		model.setScript(script);
+		Browser browser = model.getSelectedBrowser();
+		List<DataObject> objects;
+		if (browser == null) objects = new ArrayList<DataObject>();
+		else objects = browser.getSelectedDataObjects();
+
+		//setStatus(false);
+		if (scriptDialog == null) {
+			scriptDialog = new ScriptingDialog(view, 
+					model.getScript(script.getScriptID()), objects, 
+					TreeViewerAgent.isBinaryAvailable());
+			scriptDialog.addPropertyChangeListener(controller);
+			UIUtilities.centerAndShow(scriptDialog);
+		} else {
+			scriptDialog.reset(model.getScript(script.getScriptID()), objects);
+			if (!scriptDialog.isVisible())
+				UIUtilities.centerAndShow(scriptDialog);
+		}
 	}
 	
+	/** 
+	 * Implemented as specified by the {@link TreeViewer} interface.
+	 * @see TreeViewer#transfer(TreeImageDisplay, List, int)
+	 */
+	public void transfer(TreeImageDisplay target, List<TreeImageDisplay> nodes,
+			int transferAction)
+	{
+		if (target == null || nodes == null || nodes.size() == 0) return;
+		Browser browser = model.getSelectedBrowser();
+		if (browser == null) return;
+		Object ot = target.getUserObject();
+		Object os;
+		if (nodes.size() == 1) { //check if src = destination
+			TreeImageDisplay src = nodes.get(0);
+			if (src == target) {
+				browser.rejectTransfer();
+				return;
+			}
+		}
+		UserNotifier un = TreeViewerAgent.getRegistry().getUserNotifier();
+		if (browser.getBrowserType() == Browser.ADMIN_EXPLORER) {
+			if (!(ot instanceof GroupData) ||
+					!TreeViewerAgent.isAdministrator()) {
+				un.notifyInfo("DnD", "Only administrator can perform" +
+						"such action.");
+				browser.rejectTransfer();
+				return;
+			}
+		}
+		if (!isUserOwner(ot)) {
+			un.notifyInfo("DnD", 
+					"You must be the owner of the container.");
+			browser.rejectTransfer();
+			return;
+		}
+		List<TreeImageDisplay> list = new ArrayList<TreeImageDisplay>();
+		Iterator<TreeImageDisplay> i = nodes.iterator();
+		TreeImageDisplay n;
+		
+		int count = 0;
+		String child;
+		String parent;
+		os = null;
+		int childCount = 0;
+		while (i.hasNext()) {
+			n = i.next();
+			os = n.getUserObject();
+			if (target.contains(n)) {
+				childCount++;
+			} else {
+				if (EditorUtil.isTransferable(ot, os)) {
+					count++;
+					if (ot instanceof GroupData) {
+						if (TreeViewerAgent.isAdministrator())
+							list.add(n);
+					} else {
+						if (isUserOwner(os)) list.add(n);
+					}
+				}
+			}
+		}
+		if (childCount == nodes.size()) {
+			browser.rejectTransfer();
+			return;
+		}
+		if (list.size() == 0) {
+			String s = "";
+			if (nodes.size() > 1) s = "s";
+			un.notifyInfo("DnD", 
+			"The "+getObjectType(os)+s+" cannot be moved to the selected "+
+				getObjectType(ot)+".");
+			browser.rejectTransfer();
+			return;
+		}
+		model.transfer(target, list);
+	}
+
 }

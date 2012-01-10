@@ -20,8 +20,11 @@ finally:
 
 sys = __import__("sys")
 import exceptions, traceback, threading, logging
-import Ice, Glacier2, Glacier2_Router_ice
+import IceImport, Ice
 import omero_ext.uuid as uuid # see ticket:3774
+
+IceImport.load("Glacier2_Router_ice")
+import Glacier2
 
 class BaseClient(object):
     """
@@ -174,6 +177,7 @@ class BaseClient(object):
         # Strictly necessary for this class to work
         id.properties.setProperty("Ice.ImplicitContext", "Shared")
         id.properties.setProperty("Ice.ACM.Client", "0")
+        id.properties.setProperty("Ice.CacheMessageBuffers", "0")
         id.properties.setProperty("Ice.RetryIntervals", "-1")
         id.properties.setProperty("Ice.Default.EndpointSelection", "Ordered")
         id.properties.setProperty("Ice.Default.PreferSecure", "1")
