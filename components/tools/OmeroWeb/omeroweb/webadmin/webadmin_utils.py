@@ -3,7 +3,7 @@ import traceback
 import re
 from omero_version import omero_version
 
-from webclient.webclient_gateway import OmeroWebGateway
+#from webclient.webclient_gateway import OmeroWebGateway
 from omeroweb.webgateway.views import _createConnection
 
 logger = logging.getLogger('admin-utils')

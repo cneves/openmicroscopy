@@ -55,7 +55,7 @@ from django.views import debug
 from django.core.cache import cache
 from django.utils.encoding import smart_str
 
-from webclient.webclient_gateway import OmeroWebGateway
+#from webclient.webclient_gateway import OmeroWebGateway
 
 from forms import LoginForm, ForgottonPasswordForm, ExperimenterForm, \
                    GroupForm, GroupOwnerForm, MyAccountForm, ChangePassword, \
@@ -69,7 +69,7 @@ from controller.drivespace import BaseDriveSpace, usersData
 from controller.uploadfile import BaseUploadFile
 from controller.enums import BaseEnums
 
-from omeroweb.webclient.views import _session_logout
+#from omeroweb.webclient.views import _session_logout
 from omeroweb.webadmin.webadmin_utils import _checkVersion, _isServerOn, toBoolean, upgradeCheck, getGuestConnection
 from omeroweb.webgateway.views import getBlitzConnection
 
