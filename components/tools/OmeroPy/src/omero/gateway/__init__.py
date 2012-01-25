@@ -1792,11 +1792,14 @@ class _BlitzGateway (object):
         """
         if self.getEventContext().groupId == groupid:
             return True
-        if groupid not in self._ctx.memberOfGroups:
+        if groupid not in self._ctx.memberOfGroups and 0 not in self._ctx.memberOfGroups:
             return False
         self._lastGroupId = self._ctx.groupId
+        self._ctx = None
         if hasattr(self.c.sf, 'setSecurityContext'):
             # Beta4.2
+            for s in self.c.getStatefulServices():
+                s.close()
             self.c.sf.setSecurityContext(omero.model.ExperimenterGroupI(groupid, False))
         else:
             self.getSession()
