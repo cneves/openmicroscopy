@@ -164,6 +164,21 @@ public class FileImportComponent
 	/** Text to indicate to view the image. */
 	private static final String PYRAMID_TEXT = "Building pyramid, please wait";
 	
+	/** Text to indicate that the thumbnail cannot be created */
+	private static final String IMAGE_CREATION_ERROR_TEXT = 
+		"Cannot create thumbnail";
+	
+	/** Text to indicate that the compression level is not supported. */
+	private static final String COMPRESSION_ERROR_TEXT = 
+		"Compression not supported";
+	
+	/** Text to indicate that library is missing. */
+	private static final String MISSING_LIB_ERROR_TEXT = 
+		"Missing Library";
+	
+	/** Text to indicate that the file is not accessible. */
+	private static final String FILE_ON_TAPE_ERROR_TEXT = "File on Tape";
+	
 	/** Tool tip text to indicate to browse the container. */
 	private static final String BROWSE_CONTAINER_TOOLTIP = "Click to browse.";
 
@@ -837,8 +852,16 @@ public class FileImportComponent
 					containerLabel.setVisible(showContainerLabel);
 				}
 			} else {
+				statusLabel.setVisible(false);
 				fileNameLabel.setForeground(ERROR_COLOR);
-				resultLabel.setVisible(false);
+				resultLabel.setText(IMAGE_CREATION_ERROR_TEXT);
+				resultLabel.setToolTipText(
+						UIUtilities.formatExceptionForToolTip(
+						thumbnail.getError()));
+				resultLabel.setVisible(true);
+				errorButton.setVisible(false);
+				errorBox.setVisible(false);
+				/*
 				errorButton.setToolTipText(
 						UIUtilities.formatExceptionForToolTip(
 								thumbnail.getError()));
@@ -848,6 +871,7 @@ public class FileImportComponent
 				errorBox.addChangeListener(this);
 				deleteButton.setVisible(true);
 				deleteButton.addActionListener(this);
+				*/
 			}
 		} else if (image instanceof PlateData) {
 			imageLabel.setData((PlateData) image);
@@ -939,10 +963,23 @@ public class FileImportComponent
 					errorButton.setToolTipText(
 							UIUtilities.formatExceptionForToolTip(ie));
 					exception = ie;
-					errorButton.setVisible(true);
-					if (ie.getStatus() == ImportException.COMPRESSION) {
+					errorButton.setVisible(false);
+					int s = ie.getStatus();
+					if (s == ImportException.COMPRESSION) {
 						resultLabel.setVisible(true);
-						resultLabel.setText("Compression not supported");
+						resultLabel.setText(COMPRESSION_ERROR_TEXT);
+						resultLabel.setToolTipText(
+								UIUtilities.formatExceptionForToolTip(ie));
+					} else if (s == ImportException.MISSING_LIBRARY) {
+						resultLabel.setVisible(true);
+						resultLabel.setText(MISSING_LIB_ERROR_TEXT);
+						resultLabel.setToolTipText(
+								UIUtilities.formatExceptionForToolTip(ie));
+					} else if (s == ImportException.FILE_ON_TAPE) {
+						resultLabel.setVisible(true);
+						resultLabel.setText(FILE_ON_TAPE_ERROR_TEXT);
+						resultLabel.setToolTipText(
+								UIUtilities.formatExceptionForToolTip(ie));
 					} else {
 						errorBox.setVisible(true);
 						errorBox.addChangeListener(this);

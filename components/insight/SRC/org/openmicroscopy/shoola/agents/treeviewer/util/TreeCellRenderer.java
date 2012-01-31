@@ -296,10 +296,18 @@ public class TreeCellRenderer
     /** Flag indicating if the node to render is the target node.*/
     private boolean isTargetNode;
     
+    /** Flag indicating if the node to render is the target node.*/
+    private boolean droppedAllowed;
+    
     /** The color used when dragging.*/
     private Color draggedColor;
+
+    /** Indicates if the node is selected or not.*/
+    private boolean selected;
     
-	
+    /** The location of the text.*/
+    private int xText;
+    
     /**
      * Sets the icon and the text corresponding to the user's object.
      * 
@@ -475,6 +483,7 @@ public class TreeCellRenderer
     public TreeCellRenderer(boolean b)
     {
         numberChildrenVisible = b;
+        selected = false;
         filter = new EditorFileFilter();
         draggedColor = new Color(backgroundSelectionColor.getRed(),
 				backgroundSelectionColor.getGreen(),
@@ -496,11 +505,15 @@ public class TreeCellRenderer
         super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, 
                                                 row, hasFocus);
         isTargetNode = false;
+        droppedAllowed = true;
+        selected = sel;
         if (tree instanceof DnDTree) {
         	DnDTree dndTree = (DnDTree) tree;
         	isTargetNode = (value == dndTree.getDropTargetNode());
+        	if (dndTree.getRowDropLocation() == row) {
+        		droppedAllowed = false;
+        	}
         }
-
         setIcon(FILE_TEXT_ICON);
         if (!(value instanceof TreeImageDisplay)) return this;
         TreeImageDisplay  node = (TreeImageDisplay) value;
@@ -535,11 +548,13 @@ public class TreeCellRenderer
         if (getIcon() != null) w += getIcon().getIconWidth();
         else w += SIZE.width;
         w += getIconTextGap();
+        xText = w;
         if (ho instanceof ImageData)
         	w += fm.stringWidth(node.getNodeName());
         else if (node instanceof TreeFileSet)
         	w +=  fm.stringWidth(getText())+40;
         else w += fm.stringWidth(getText());
+        
         setPreferredSize(new Dimension(w, fm.getHeight()+4));//4 b/c GTK L&F
         setEnabled(node.isSelectable());
         return this;
@@ -551,11 +566,19 @@ public class TreeCellRenderer
      */
     public void paintComponent(Graphics g)
     {
-    	super.paintComponent(g);
-		if (isTargetNode) {
-			g.setColor(draggedColor);
-			g.fillRoundRect(0, 0, getSize().width-1, getSize().height-1, 2, 2);
+    	//super.paintComponent(g);
+    	if (isTargetNode) {
+			if (!droppedAllowed) {
+				if (selected) g.setColor(backgroundSelectionColor);
+				else g.setColor(backgroundNonSelectionColor);
+				
+			} else g.setColor(draggedColor);
+			g.fillRect(xText, 0, getSize().width, getSize().height);
 		}
+    	selected = false;
+    	isTargetNode = false;
+    	droppedAllowed = false;
+    	super.paintComponent(g);
 	}
   
 }
