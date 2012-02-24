@@ -9,6 +9,8 @@ package ome.security.basic;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import ome.annotations.RevisionDate;
@@ -213,26 +215,44 @@ public class BasicSecuritySystem implements SecuritySystem,
         checkReady("enableReadFilter");
         // beware
         // http://opensource.atlassian.com/projects/hibernate/browse/HHH-1932
-        EventContext ec = getEventContext();
-        Session sess = (Session) session;
-        Filter filter = sess.enableFilter(SecurityFilter.filterName);
+        final EventContext ec = getEventContext();
+        final Session sess = (Session) session;
+        final Filter filter = sess.enableFilter(SecurityFilter.filterName);
 
-        Long shareId = ec.getCurrentShareId();
-        int share01 = shareId != null ? 1 : 0;
+        final Long groupId = ec.getCurrentGroupId();
+        final Long shareId = ec.getCurrentShareId();
+        int share01 = shareId != null ? 1 : 0; // non-final; "ticket:3529" below
 
-        int admin01 = (ec.isCurrentUserAdmin() ||
+        final int admin01 = (ec.isCurrentUserAdmin() ||
                 ec.getLeaderOfGroupsList().contains(ec.getCurrentGroupId()))
                 ? 1 : 0;
 
-        int nonpriv01 = (ec.getCurrentGroupPermissions().isGranted(Role.GROUP, Right.READ)
+        final int nonpriv01 = (ec.getCurrentGroupPermissions().isGranted(Role.GROUP, Right.READ)
                 || ec.getCurrentGroupPermissions().isGranted(Role.WORLD, Right.READ))
                 ? 1 : 0;
+
+        // ticket:3529 - if the group id is less than zero, then we assume that
+        // SELECTs should return more than a single group.
+        Collection<Long> groups = null;
+        if (groupId < 0) { // Special marker
+            if (ec.isCurrentUserAdmin()) {
+                // Admin is considered to be in every group
+                share01 = 1;
+                groups = Collections.singletonList(-1L);
+            } else {
+                // Non-admin are only in their groups.
+                groups = ec.getMemberOfGroupsList();
+            }
+        } else {
+            // Group is a real value, pass only one.
+            groups = Collections.singletonList(groupId);
+        }
 
         filter.setParameter(SecurityFilter.is_share, share01); // ticket:2219, not checking -1 here.
         filter.setParameter(SecurityFilter.is_adminorpi, admin01);
         filter.setParameter(SecurityFilter.is_nonprivate, nonpriv01);
-        filter.setParameter(SecurityFilter.current_group, ec.getCurrentGroupId());
         filter.setParameter(SecurityFilter.current_user, ec.getCurrentUserId());
+        filter.setParameterList(SecurityFilter.current_groups, groups);
     }
 
     public void  updateReadFilter(Session session) {
@@ -340,6 +360,7 @@ public class BasicSecuritySystem implements SecuritySystem,
 
         // Refill current details
         cd.copy(ec);
+        ec = cd.getCurrentEventContext(); // Replace with callContext
 
         // Experimenter
         Experimenter exp;
@@ -359,30 +380,53 @@ public class BasicSecuritySystem implements SecuritySystem,
             }
         }
 
-        // Active group
-        ExperimenterGroup grp;
-        Long groupId = cd.getCallGroup();
+        // Active group - starting with #3529, the current group and the current
+        // share values should be definitive as setting the context on
+        // BasicEventContext will automatically update the global values. For
+        // security reasons, we need only guarantee that non-admins are
+        // actually members of the noted groups.
+        //
+        // Joined with public group block (ticket:1940)
+        ExperimenterGroup callGroup = null;
+        ExperimenterGroup eventGroup = null;
         Long shareId = ec.getCurrentShareId();
-        if (groupId == null) {
-            groupId = ec.getCurrentGroupId();
-        } else {
-            if (groupId >= 0) {
-                log.debug("Using call-requested group: " + groupId);
-            } else {
-                // ticket:2950
-                if (!isAdmin) {
-                    throw new SecurityViolation("Only administrators can use negative groups!");
+        Long groupId = ec.getCurrentGroupId();
+        if (groupId >= 0) { // negative groupId means all member groups
+            // tickets:2950, 1940, 3529
+            if (!isAdmin && !ec.getMemberOfGroupsList().contains(groupId)) {
+                // Only force loading the group if we would otherwise throw an exception.
+                // The extra performance hit on READ is just the price of browsing
+                // public data
+                callGroup = admin.groupProxy(groupId);
+                if (!callGroup.getDetails().getPermissions().isGranted(Role.WORLD, Right.READ)) {
+                    throw new SecurityViolation(String.format(
+                        "User %s is not a member of group %s and cannot login",
+                                ec.getCurrentUserId(), groupId));
                 }
-                log.info("Setting share id to -1");
-                shareId = -1L;
-                groupId = ec.getCurrentGroupId();
             }
         }
 
+        // Handle eventGroup
+        long eventGroupId = groupId;
+        if (groupId < 0) {
+            List<Long> memList = ec.getMemberOfGroupsList();
+            eventGroupId = memList.get(0);
+            if (eventGroupId == roles.getUserGroupId() && memList.size() > 1) {
+                eventGroupId = memList.get(1);
+            }
+            log.debug("Choice for event group: " + eventGroupId);
+        }
+
         if (isReadOnly) {
-            grp = new ExperimenterGroup(groupId, false);
+            callGroup = new ExperimenterGroup(groupId, false);
+            eventGroup = new ExperimenterGroup(eventGroupId, false);
         } else {
-            grp = admin.groupProxy(groupId);
+            if (groupId < 0L) {
+                callGroup = new ExperimenterGroup(groupId, false);
+            } else if (callGroup == null) {
+                callGroup = admin.groupProxy(groupId);
+            }
+            eventGroup = admin.groupProxy(eventGroupId);
         }
 
         long sessionId = ec.getCurrentSessionId().longValue();
@@ -393,23 +437,11 @@ public class BasicSecuritySystem implements SecuritySystem,
             sess = sf.getQueryService().get(ome.model.meta.Session.class, sessionId);
         }
 
-        // public groups (ticket:1940)
-        if (!isAdmin && !ec.getMemberOfGroupsList().contains(grp.getId())) {
-            // Only force loading the group if we would otherwise throw an exception.
-            // The extra performance hit on READ is just the price of browsing
-            // public data
-            ExperimenterGroup publicGroup = admin.groupProxy(groupId);
-            if (!publicGroup.getDetails().getPermissions().isGranted(Role.WORLD, Right.READ)) {
-                throw new SecurityViolation(String.format(
-                    "User %s is not a member of group %s and cannot login",
-                            ec.getCurrentUserId(), grp.getId()));
-            }
-        }
-        tokenHolder.setToken(grp.getGraphHolder());
+        tokenHolder.setToken(callGroup.getGraphHolder());
 
         // In order to less frequently access the ThreadLocal in CurrentDetails
         // All properities are now set in one shot, except for Event.
-        cd.setValues(exp, grp, isAdmin, isReadOnly, shareId);
+        cd.setValues(exp, callGroup, isAdmin, isReadOnly, shareId);
 
         // Event
         String t = p.getEventType();
@@ -424,9 +456,11 @@ public class BasicSecuritySystem implements SecuritySystem,
         // If this event is not read only, then lets save this event to prevent
         // flushing issues later.
         if (!isReadOnly) {
+            if (event.getExperimenterGroup().getId() < 0) {
+                event.setExperimenterGroup(eventGroup);
+            }
             cd.updateEvent(update.saveAndReturnObject(event)); // TODO use merge
         }
-
     }
 
     private Principal clearAndCheckPrincipal() {
@@ -573,11 +607,19 @@ public class BasicSecuritySystem implements SecuritySystem,
     }
 
     /**
+     * Calls {@link #runAsAdmin(AdminAction)} with a null-group id.
+     */
+    public void runAsAdmin(final AdminAction action) {
+        runAsAdmin(null, action);
+    }
+
+    /**
      * merge event is disabled for {@link #runAsAdmin(AdminAction)} because
      * passing detached (client-side) entities to this method is particularly
      * dangerous.
      */
-    public void runAsAdmin(final AdminAction action) {
+    public void runAsAdmin(final ExperimenterGroup group, final AdminAction action) {
+
         Assert.notNull(action);
 
         // Need to check here so that no exception is thrown
@@ -591,14 +633,21 @@ public class BasicSecuritySystem implements SecuritySystem,
 
                 BasicEventContext c = cd.current();
                 boolean wasAdmin = c.isCurrentUserAdmin();
+                ExperimenterGroup oldGroup = c.getGroup();
 
                 try {
                     c.setAdmin(true);
+                    if (group != null) {
+                        c.setGroup(group);
+                    }
                     disable(MergeEventListener.MERGE_EVENT);
                     enableReadFilter(session);
                     action.runAsAdmin();
                 } finally {
                     c.setAdmin(wasAdmin);
+                    if (group != null) {
+                        c.setGroup(oldGroup);
+                    }
                     enable(MergeEventListener.MERGE_EVENT);
                     enableReadFilter(session); // Now as non-admin
                 }
@@ -641,6 +690,25 @@ public class BasicSecuritySystem implements SecuritySystem,
 
     public EventContext getEventContext() {
         return getEventContext(false);
+    }
+
+    /**
+     * Returns the Id of the currently logged in user.
+     * Returns owner of the share while in share
+     * @return See above.
+     */
+    public Long getEffectiveUID() {
+        final EventContext ec = getEventContext();
+        final Long shareId = ec.getCurrentShareId();
+        if (shareId != null) {
+            if (shareId < 0) {
+                return null;
+            }
+            ome.model.meta.Session s = sf.getQueryService().get(
+                    ome.model.meta.Session.class, shareId);
+            return s.getOwner().getId();
+        }
+        return ec.getCurrentUserId();
     }
 
     // ~ Helpers
