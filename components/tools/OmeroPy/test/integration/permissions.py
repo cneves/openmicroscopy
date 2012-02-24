@@ -473,13 +473,109 @@ class TestPermissions(lib.ITest):
                 return client, user
         F(self).assertCallContext()
 
-    # Helpers
+    # Write tests with omero.group set.
+    # ==============================================
 
-    def eventContextGetter(self, admin):
-        return lambda: admin.getEventContext().groupId
+    def testSaveWithNegOneExplicit(self):
 
-    def assertGroup(self, getter, grp):
-        self.assertEquals(getter(), grp)
+        # Get a user and services
+        client, user = self.new_client_and_user()
+
+        # Create a new object with an explicit group
+        admin = client.sf.getAdminService()
+        ec = admin.getEventContext()
+        grp = omero.model.ExperimenterGroupI(ec.groupId, False)
+        tag = omero.model.TagAnnotationI()
+        tag.details.group = grp
+
+        # Now try to save it in the -1 context
+        update = client.sf.getUpdateService()
+        all_context = {"omero.group":"-1"}
+        update.saveAndReturnObject(tag, all_context)
+
+    def testSaveWithNegOneNotExplicit(self):
+
+        # Get a user and services
+        client, user = self.new_client_and_user()
+
+        # Create a new object without any
+        # explicit group
+        tag = omero.model.TagAnnotationI()
+
+        # Now try to save it in the -1 context
+        update = client.sf.getUpdateService()
+        all_context = {"omero.group":"-1"}
+        # An internal exception is raised when
+        # Hibernate tries to access the annotations
+        # for the null group set on the obj.
+        # This isn't optimal but will work for
+        # the moment.
+        self.assertRaises(omero.InternalException, \
+                update.saveAndReturnObject, tag, all_context)
+
+    def testSaveWithNegBadLink(self):
+
+        # Get a user and services
+        client, user = self.new_client_and_user()
+        admin = client.sf.getAdminService()
+        group1 = admin.getGroup(admin.getEventContext().groupId)
+        group2 = self.new_group(experimenters=[user])
+        for x in (group1, group2):
+            x.unload()
+        admin.getEventContext() # Refresh
+
+        # Create a new object with a bad link
+        image = self.new_image()
+        image.details.group = group1
+        tag = omero.model.TagAnnotationI()
+        tag.details.group = group2
+        link = image.linkAnnotation(tag)
+        link.details.group = group2
+
+        # Now try to save it in the -1 context
+        update = client.sf.getUpdateService()
+        all_context = {"omero.group":"-1"}
+        # Bad links should be detected and
+        # a security violation raised.
+        self.assertRaises(omero.SecurityViolation, \
+                update.saveAndReturnObject, image, all_context)
+
+    # Reading with private groups
+    # ==============================================
+
+    def testPrivateGroupCallContext(self):
+
+        # Setup groups as per Carlos' instructions (Feb 23)
+        groupX = self.new_group(perms="rwrw--")
+        clientA, userA = self.new_client_and_user(group=groupX)
+        gid = str(groupX.id.val)
+
+        groupY = self.new_group(perms="rw----")
+        clientB, userB = self.new_client_and_user(group=groupY)
+        self.add_experimenters(groupX, [userB])
+        clientB.sf.getAdminService().getEventContext() # Refresh
+
+        # Create the object as user A
+        tag = omero.model.TagAnnotationI()
+        tag = clientA.sf.getUpdateService().saveAndReturnObject(tag)
+        tid = tag.id.val
+
+        # Now try to read it in different ways
+        qa = clientA.sf.getQueryService()
+        qb = clientB.sf.getQueryService()
+        qr = self.root.sf.getQueryService()
+
+        negone = {"omero.group":"-1"}
+        specific = {"omero.group":gid}
+
+        qa.get("TagAnnotation", tid)
+        qa.get("TagAnnotation", tid, specific)
+        qa.get("TagAnnotation", tid, negone)
+        qr.get("TagAnnotation", tid, specific) # Not currently in gid
+        qr.get("TagAnnotation", tid, negone)
+        qb.get("TagAnnotation", tid, specific) # Not currently in gid
+        qb.get("TagAnnotation", tid, negone)
+
 
 if __name__ == '__main__':
     unittest.main()
