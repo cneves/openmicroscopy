@@ -157,7 +157,7 @@ class RDefsTest (lib.GTest):
             # Try the propagation as admin
             self.loginAsAdmin()
             rsettings = self.gateway.getRenderingSettingsService()
-            sopts = dict(self.gateway.CONFIG['SERVICE_OPTS'] or {})
+            sopts = dict(self.gateway.CONFIG.get('SERVICE_OPTS', {}) or {})
             sopts['omero.group'] = str(i1.getDetails().getGroup().getId())
             rv = rsettings.applySettingsToImages(frompid, list(toids), sopts)
             err = '''FAIL: rsettings.applySettingsToImages(%i, (%i,)) -> %s''' % (i1.getId(), i2.getId(), rv)
