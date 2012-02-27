@@ -6,6 +6,7 @@
  */
 package ome.server.utests;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -44,6 +45,10 @@ public class DummyExecutor implements Executor {
     }
 
     public Object execute(Principal p, Work work) {
+        return execute(null, p, work);
+    }
+
+    public Object execute(Map<String, String> callContext, Principal p, Work work) {
         return work.doWork(session, sf);
     }
 
@@ -73,14 +78,6 @@ public class DummyExecutor implements Executor {
     }
 
     public Principal principal() {
-        throw new UnsupportedOperationException();
-    }
-
-    public void setCallGroup(long gid) {
-        throw new UnsupportedOperationException();
-    }
-
-    public void resetCallGroup() {
         throw new UnsupportedOperationException();
     }
 

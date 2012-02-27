@@ -68,7 +68,12 @@ public class CurrentDetails implements PrincipalHolder {
 
     private final ThreadLocal<LinkedList<BasicEventContext>> contexts = new ThreadLocal<LinkedList<BasicEventContext>>();
 
-    private final ThreadLocal<Map<String, String>> callContext = new ThreadLocal<Map<String, String>>();
+    /**
+     * Call context set on the current details before login occurred. If this
+     * is the case, then it will get consumed and
+     */
+    private final ThreadLocal<Map<String, String>> delayedCallContext
+        = new ThreadLocal<Map<String, String>>();
 
     /**
      * Default constructor. Should only be used for testing, since the stats
@@ -95,51 +100,19 @@ public class CurrentDetails implements PrincipalHolder {
     // =================================================================
 
     public Map<String, String> setContext(Map<String, String> ctx) {
-        Map<String, String> rv = callContext.get();
-        callContext.set(ctx);
-        return rv;
+        LinkedList<BasicEventContext> list = list();
+        if (list.size() == 0) {
+            delayedCallContext.set(ctx);
+            return null;
+        } else {
+            return list.getLast().setCallContext(ctx);
+        }
     }
 
-    public Long getCallGroup() {
-        Map<String, String> ctx = callContext.get();
-        if (ctx != null && ctx.containsKey("omero.group")) {
-            String s = ctx.get("omero.group");
-            try {
-                return Long.valueOf(ctx.get("omero.group"));
-            } catch (Exception e) {
-                log.debug("Ignoring invalid omero.group context: " + s);
-                return null;
-            }
-        }
-        return null;
-    }
-
-    public void setCallGroup(Long id) {
-        Map<String, String> ctx = callContext.get();
-        if (ctx == null) {
-            ctx = new HashMap<String, String>();
-            callContext.set(ctx);
-        }
-
-        String old = ctx.get("omero.group.old");
-        String curr = ctx.get("omero.group");
-        if (old != null) {
-            throw new RuntimeException("Recursive call! " +
-                    String.format("Old: %s Current: %s New: %s",
-                            old, curr, id));
-        }
-
-        ctx.put("omero.group.old", curr);
-        ctx.put("omero.group", "" + id);
-    }
-
-    public void resetCallGroup() {
-        Map<String, String> ctx = callContext.get();
-        if (ctx != null) {
-            String old = ctx.get("omero.group.old");
-            ctx.remove("omero.group.old");
-            ctx.put("omero.group", old);
-        }
+    protected void checkDelayedCallContext(BasicEventContext bec) {
+        Map<String, String> ctx = delayedCallContext.get();
+        delayedCallContext.set(null);
+        bec.setCallContext(ctx);
     }
 
     // PrincipalHolder methods
@@ -171,6 +144,7 @@ public class CurrentDetails implements PrincipalHolder {
         if (log.isDebugEnabled()) {
             log.debug("Logging in :" + bec);
         }
+        checkDelayedCallContext(bec);
         list().add(bec);
         bec.getStats().methodIn();
     }

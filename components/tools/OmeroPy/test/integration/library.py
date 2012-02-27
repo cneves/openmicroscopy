@@ -123,11 +123,15 @@ class ITest(unittest.TestCase):
             group.details.permissions = omero.model.PermissionsI(perms)
         gid = admin.createGroup(group)
         group = admin.getGroup(gid)
+        self.add_experimenters(group, experimenters)
+        return group
+
+    def add_experimenters(self, group, experimenters):
+        admin = self.root.sf.getAdminService()
         if experimenters:
             for exp in experimenters:
                 user, name = self.user_and_name(exp)
                 admin.addGroups(user, [group])
-        return group
 
     def new_image(self, name = ""):
         img = omero.model.ImageI()
@@ -309,7 +313,12 @@ class ITest(unittest.TestCase):
 
     def user_and_name(self, user):
         admin = self.root.sf.getAdminService()
-        if isinstance(user, omero.model.Experimenter):
+        if isinstance(user, omero.clients.BaseClient):
+            admin = user.sf.getAdminService()
+            ec = admin.getEventContext()
+            name = ec.userName
+            user = admin.lookupExperimenter(name)
+        elif isinstance(user, omero.model.Experimenter):
             if user.isLoaded():
                 name = user.omeName.val
                 user = admin.lookupExperimenter(name)
