@@ -512,9 +512,7 @@ def render_birds_eye_view (request, iid, server_id=None, size=None,
     if blitzcon is None or not blitzcon.isConnected():
         logger.debug("failed connect, HTTP404")
         raise Http404
-    USE_SESSION = False
-    img = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn,
-                              with_session=USE_SESSION)
+    img = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn)
     if img is None:
         logger.debug("(b)Image %s not found..." % (str(iid)))
         raise Http404
@@ -612,7 +610,7 @@ def render_roi_thumbnail (request, roiId, server_id=None, w=None, h=None, _conn=
     midZ = zList[len(zList)/2]
     s = shapes[(midZ, minT)]
     
-    pi = _get_prepared_image(request, imageId, server_id=server_id, _conn=_conn, with_session=False)
+    pi = _get_prepared_image(request, imageId, server_id=server_id, _conn=_conn)
     
     if pi is None:
         raise Http404
@@ -640,7 +638,7 @@ def render_shape_thumbnail (request, shapeId, server_id=None, w=None, h=None, _c
 
     imageId = shape.roi.image.id.val
 
-    pi = _get_prepared_image(request, imageId, server_id=server_id, _conn=_conn, with_session=False)
+    pi = _get_prepared_image(request, imageId, server_id=server_id, _conn=_conn)
     if pi is None:
         raise Http404
     image, compress_quality = pi
@@ -885,7 +883,7 @@ def _get_signature_from_request (request):
     return rv
 
 @serverid
-def _get_prepared_image (request, iid, server_id=None, _conn=None, with_session=True, saveDefs=False, retry=True):
+def _get_prepared_image (request, iid, server_id=None, _conn=None, saveDefs=False, retry=True):
     """
     Fetches the Image object for image 'iid' and prepares it according to the request query, setting the channels,
     rendering model and projection arguments. The compression level is parsed and returned too.
@@ -901,11 +899,11 @@ def _get_prepared_image (request, iid, server_id=None, _conn=None, with_session=
     @return:            Tuple (L{omero.gateway.ImageWrapper} image, quality)
     """
     r = request.REQUEST
-    logger.debug('Preparing Image:%r with_session=%r saveDefs=%r ' \
-                 'retry=%r request=%r' % (iid, with_session, saveDefs, retry,
-                 r))
+    logger.debug('Preparing Image:%r saveDefs=%r ' \
+                 'retry=%r request=%r conn=%s' % (iid, saveDefs, retry,
+                 r, str(_conn)))
     if _conn is None:
-        _conn = getBlitzConnection(request, server_id=server_id, with_session=with_session, useragent="OMERO.webgateway")
+        _conn = getBlitzConnection(request, server_id=server_id, useragent="OMERO.webgateway")
     if _conn is None or not _conn.isConnected():
         return HttpResponseServerError('""', mimetype='application/javascript')
     img = _conn.getObject("Image", iid)
@@ -935,7 +933,7 @@ def _get_prepared_image (request, iid, server_id=None, _conn=None, with_session=
                 if x.message.find('Session is dirty') >= 0:
                     if retry:
                         # retry once, to get around "Session is dirty" exceptions
-                        return _get_prepared_image(request, iid=iid, server_id=server_id, _conn=_conn, with_session=with_session, saveDefs=saveDefs, retry=False)
+                        return _get_prepared_image(request, iid=iid, server_id=server_id, _conn=_conn, saveDefs=saveDefs, retry=False)
                     logger.debug("Session is dirty, bailing out")
                     raise
             else:
@@ -962,9 +960,7 @@ def render_image_region(request, iid, z, t, server_id=None, _conn=None, **kwargs
     # alternatively, could return a 404?    
     #if h == None:
     #    return render_image (request, iid, z, t, server_id=None, _conn=None, **kwargs)
-    
-    USE_SESSION = False
-    pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn, with_session=USE_SESSION)
+    pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn)
     
     if pi is None:
         raise Http404
@@ -1031,8 +1027,7 @@ def render_image (request, iid, z, t, server_id=None, _conn=None, **kwargs):
     @return:            http response wrapping jpeg
     """
     
-    USE_SESSION = False
-    pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn, with_session=USE_SESSION)
+    pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn)
     if pi is None:
         raise Http404
     img, compress_quality = pi
@@ -1068,9 +1063,8 @@ def render_ome_tiff (request, ctx, cid, server_id=None, _conn=None, **kwargs):
     @param _conn:       L{omero.gateway.BlitzGateway} connection
     @return:            http response wrapping the tiff (or zip for multiple files), or redirect to temp file/zip
     """
-    USE_SESSION = False
     if _conn is None:
-        _conn = getBlitzConnection(request, server_id=server_id, with_session=USE_SESSION, useragent="OMERO.webgateway")
+        _conn = getBlitzConnection(request, server_id=server_id, with_session=False, useragent="OMERO.webgateway")
     if _conn is None or not _conn.isConnected():
         return HttpResponseServerError('""', mimetype='application/javascript')
     imgs = []
@@ -1191,9 +1185,8 @@ def render_movie (request, iid, axis, pos, server_id=None, _conn=None, **kwargs)
         key = "%s-%s-%s-%d-%s-%s" % (iid, axis, pos, opts['fps'], _get_signature_from_request(request),
                                   request.REQUEST.get('format', 'quicktime'))
         
-        USE_SESSION = False
         pos = int(pos)
-        pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn, with_session=USE_SESSION)
+        pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn)
         if pi is None:
             raise Http404
         img, compress_quality = pi
@@ -1252,8 +1245,7 @@ def render_split_channel (request, iid, z, t, server_id=None, _conn=None, **kwar
     @return:            http response wrapping a jpeg
     """
     
-    USE_SESSION = False
-    pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn, with_session=USE_SESSION)
+    pi = _get_prepared_image(request, iid, server_id=server_id, _conn=_conn)
     if pi is None:
         raise Http404
     img, compress_quality = pi
@@ -1367,7 +1359,11 @@ def render_row_plot (request, iid, z, t, y, server_id=None, _conn=None, w=1, **k
     if pi is None:
         raise Http404
     img, compress_quality = pi
-    gif_data = img.renderRowLinePlotGif(int(z),int(t),int(y), int(w))
+    try:
+        gif_data = img.renderRowLinePlotGif(int(z),int(t),int(y), int(w))
+    except:
+        logger.debug('a', exc_info=True)
+        raise
     if gif_data is None:
         raise Http404
     rsp = HttpResponse(gif_data, mimetype='image/gif')
@@ -1837,7 +1833,7 @@ def save_image_rdef_json (request, iid, server_id=None, **kwargs):
     """
     
     r = request.REQUEST
-    pi = _get_prepared_image(request, iid, server_id=server_id, with_session=True, saveDefs=True)
+    pi = _get_prepared_image(request, iid, server_id=server_id, saveDefs=True)
     if pi is None:
         json_data = 'false'
     else:
