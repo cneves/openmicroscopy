@@ -129,8 +129,9 @@ public class AllGroupsSecurityFilter extends AbstractSecurityFilter {
         final Long g = d.getGroup().getId();
 
         // ticket:8798 - load permissions for group of object regardless.
-        final Permissions p = ((ExperimenterGroup) session.get(ExperimenterGroup.class, g))
-            .getDetails().getPermissions();
+        final ExperimenterGroup group = (ExperimenterGroup) session.get(ExperimenterGroup.class, g);
+        org.hibernate.Hibernate.initialize(group);
+        final Permissions p = group.getDetails().getPermissions();
 
         if (share || admin) {
             return true;
