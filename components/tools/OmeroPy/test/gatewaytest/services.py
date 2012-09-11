@@ -148,7 +148,34 @@ class TablesTest (lib.GTest):
         self.assertNotEqual(file_annotation, None)
         table = sr.openTable(file_annotation._obj.file, self.gateway.SERVICE_OPTS)
         self.assertNotEqual(table, None)
-
+        # read as User, with groupread
+        group = file_annotation.details.group
+        gperm = str(file_annotation.details.group.details.permissions)
+        try:
+            self.loginAsUser()
+            uid = self.gateway.getUserId()
+            self.loginAsAdmin()
+            admin = self.gateway.getAdminService()
+            admin.changePermissions(group, omero.model.PermissionsI('rwrw--'))
+            admin.addGroups(omero.model.ExperimenterI(uid, False), [group])
+            self.loginAsUser()
+            sr = self.gateway.getSharedResources()
+            self.gateway.SERVICE_OPTS.setOmeroGroup(group.id.val)
+            pr = self.getTestProject()
+            self.assertNotEqual(pr, None)
+            file_annotation = pr.getAnnotation(ns='openmicroscopy.org/omero/bulk_annotations')
+            self.assertNotEqual(file_annotation, None)
+            table = sr.openTable(file_annotation._obj.file, self.gateway.SERVICE_OPTS)
+            self.assertNotEqual(table, None)
+            # Same thing, but with group -1 in ctx
+            self.gateway.SERVICE_OPTS.setOmeroGroup(-1)
+            table = sr.openTable(file_annotation._obj.file, self.gateway.SERVICE_OPTS)
+            self.assertNotEqual(table, None)
+        finally:
+            self.loginAsAdmin()
+            admin = self.gateway.getAdminService()
+            admin.changePermissions(group, omero.model.PermissionsI(gperm))
+            admin.removeGroups(omero.model.ExperimenterI(uid, False), [group])
 
 
 if __name__ == '__main__':
