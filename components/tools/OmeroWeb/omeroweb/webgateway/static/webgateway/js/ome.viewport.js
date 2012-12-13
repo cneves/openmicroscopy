@@ -17,6 +17,7 @@
 
 /* Public constructors */
 var viewportLoadingMsg;
+var viewportLinePlotLoadingMsg;
 jQuery.fn.WeblitzViewport = function (server, options) {
   return this.each
   (
@@ -445,7 +446,10 @@ jQuery._WeblitzViewport = function (container, server, options) {
     if (linePlot && linePlot.position <= (linePlot.isHorizontal() ? this.loadedImg.size.height : this.loadedImg.size.width)) {
       var _cb = function () { cb && cb(); hideLoading(); };
       var _error_cb = function () { hideLoading(); showLoading('Error loading line plot!', 5); };
-      showLoading('Loading line plot...');
+        if (viewportLinePlotLoadingMsg === undefined) {
+            viewportLinePlotLoadingMsg = 'Loading line plot...';
+        }
+      showLoading(viewportLinePlotLoadingMsg);
       this.viewportimg.get(0).showOverlay(linePlot.getUrl(), _cb, _error_cb);
     } else {
       this.hidePlot();
