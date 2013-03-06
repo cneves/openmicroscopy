@@ -35,7 +35,7 @@ $.fn.postit = function(cfg) {
   return this.each(function(){
     /* The basic setup */
     var self = jQuery(this);
-    this.bounding_elm = cfg.bounding ? $(cfg.bounding) : $('body');
+    this.bounding_elm = (cfg && cfg.bounding) ? $(cfg.bounding) : $('body');
     this.postit_open_handler = function () {
       self.trigger('opening');
     };
