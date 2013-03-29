@@ -135,6 +135,9 @@ class Connector(object):
         server = Server.get(self.server_id)
         if server is None:
             server = Server.find(server=self.server_id)[0]
+        # now take the verbose server name as server_id, used in cache keys
+        if server.server:
+            self.server_id = server.server
         return (server.host, server.port)
 
     def create_gateway(self, useragent, username=None, password=None):
