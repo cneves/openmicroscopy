@@ -403,7 +403,7 @@ using bin\omero web start on Windows with FastCGI.
             cmd = "python manage.py runfcgi workdir=./"
             cmd += " method=prefork socket=%(base)s/var/django_fcgi.sock"
             cmd += " pidfile=%(base)s/var/django.pid daemonize=true"
-            cmd += " maxchildren=5 minspare=1 maxspare=5"
+            cmd += " maxchildren=7 minspare=1 maxspare=5"
             cmd += " maxrequests=%(maxrequests)d"
             django = (cmd % {
                 'maxrequests': settings.APPLICATION_SERVER_MAX_REQUESTS,
