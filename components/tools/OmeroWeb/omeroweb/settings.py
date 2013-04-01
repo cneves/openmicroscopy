@@ -429,7 +429,7 @@ INSTALLED_APPS = (
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.sites',
-    'omeroweb.feedback',
+    #'omeroweb.feedback',
     'omeroweb.webadmin',
     'omeroweb.webclient',
     'omeroweb.webgateway',

@@ -35,8 +35,8 @@ from django.http import HttpResponse
 from django.views.generic import RedirectView
 
 # error handler
-handler404 = "omeroweb.feedback.views.handler404"
-handler500 = "omeroweb.feedback.views.handler500"
+#handler404 = "omeroweb.feedback.views.handler404"
+#handler500 = "omeroweb.feedback.views.handler500"
 
 reverse_lazy = lazy(reverse, str) 
 
@@ -62,7 +62,7 @@ urlpatterns = patterns('',
     (r'(?i)^webstart/', include('omeroweb.webstart.urls')),
     
     (r'(?i)^url/', include('omeroweb.webredirect.urls')),
-    (r'(?i)^feedback/', include('omeroweb.feedback.urls')),
+    #(r'(?i)^feedback/', include('omeroweb.feedback.urls')),
     
     (r'(?i)^webtest/', include('omeroweb.webtest.urls')),
 
