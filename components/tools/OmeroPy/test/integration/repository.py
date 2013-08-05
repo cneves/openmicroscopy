@@ -12,7 +12,7 @@
 import platform
 import locale
 import unittest
-import integration.library as lib
+import test.integration.library as lib
 import omero
 
 from omero.callbacks import CmdCallbackI
