@@ -20,31 +20,22 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 
-import unittest
 import omero
 import time
 
-import gatewaytest.library as lib
 
 
-class FilesetTest (lib.GTest):
+class TestFileset (object):
 
-    def setUp(self):
-        super(FilesetTest, self).setUp()
-        self.loginAsAuthor()
-        self.TESTIMG = self.getTestImage()
-
-    def testFileset(self):
-        image = self.TESTIMG
+    def testFileset(self, author_testimg_tiny):
+        image = author_testimg_tiny
 
         # Assume image is not imported pre-FS
         filesCount = image.countFilesetFiles()
-        self.assertTrue(filesCount > 0, "Imported image should be linked to original files")
+        assert filesCount > 0, "Imported image should be linked to original files"
 
         # List the 'imported image files' (from fileset), check the number
         filesInFileset = list(image.getImportedImageFiles())
-        self.assertEqual(filesCount, len(filesInFileset))
+        assert filesCount ==  len(filesInFileset)
 
 
-if __name__ == '__main__':
-    unittest.main()
