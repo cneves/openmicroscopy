@@ -26,7 +26,7 @@ import test.integration.library as lib
 
 from omero.gateway import BlitzGateway
 from omero.model import ProjectI, DatasetI, ScreenI, PlateI, \
-    PlateAcquisitionI
+    PlateAcquisitionI, PermissionsI
 from omero.rtypes import rstring
 from omeroweb.webclient.tree import marshal_datasets_for_projects, \
     marshal_datasets, marshal_plates_for_screens, marshal_plates, \
@@ -65,8 +65,11 @@ def itest(request):
 
 @pytest.fixture(scope='function')
 def client(request, itest):
-    """Returns a new user client."""
-    return itest.new_client()
+    """Returns a new user client in a read-only group."""
+    # Use group read-only permissions (not private) by default
+    perms = PermissionsI()
+    perms.setGroupRead(True)
+    return itest.new_client(perms=perms.getPerm1())
 
 
 @pytest.fixture(scope='function')
@@ -96,6 +99,30 @@ def projects(request, itest, update_service, names):
     for index, project in enumerate(to_save):
         project.name = rstring(names[index])
     return update_service.saveAndReturnArray(to_save)
+
+
+@pytest.fixture(scope='function')
+def projects_different_users(request, itest, conn):
+    """
+    Returns two new OMERO Projects created by different users with
+    required fields set.
+    """
+    client = conn.c
+    group = conn.getGroupFromContext()._obj
+    projects = list()
+    # User that has already been created by the "client" fixture
+    user, name = itest.user_and_name(client)
+    itest.add_experimenters(group, [user])
+    for name in (rstring(itest.uuid()), rstring(itest.uuid())):
+        client, user = itest.new_client_and_user(group=group)
+        try:
+            project = ProjectI()
+            project.name = name
+            update_service = client.getSession().getUpdateService()
+            projects.append(update_service.saveAndReturnObject(project))
+        finally:
+            client.closeSession()
+    return projects
 
 
 @pytest.fixture(scope='function')
@@ -172,6 +199,42 @@ def datasets(request, itest, update_service):
 
 
 @pytest.fixture(scope='function')
+def screens(request, itest, update_service, names):
+    """
+    Returns four new OMERO Screens with required fields set and with names
+    that can be used to exercise sorting semantics.
+    """
+    to_save = [ScreenI(), ScreenI(), ScreenI(), ScreenI()]
+    for index, screen in enumerate(to_save):
+        screen.name = rstring(names[index])
+    return update_service.saveAndReturnArray(to_save)
+
+
+@pytest.fixture(scope='function')
+def screens_different_users(request, itest, conn):
+    """
+    Returns two new OMERO Screens created by different users with
+    required fields set.
+    """
+    client = conn.c
+    group = conn.getGroupFromContext()._obj
+    screens = list()
+    # User that has already been created by the "client" fixture
+    user, name = itest.user_and_name(client)
+    itest.add_experimenters(group, [user])
+    for name in (rstring(itest.uuid()), rstring(itest.uuid())):
+        client, user = itest.new_client_and_user(group=group)
+        try:
+            screen = ScreenI()
+            screen.name = name
+            update_service = client.getSession().getUpdateService()
+            screens.append(update_service.saveAndReturnObject(screen))
+        finally:
+            client.closeSession()
+    return screens
+
+
+@pytest.fixture(scope='function')
 def screen_plate_run(request, itest, update_service):
     """
     Returns a new OMERO Screen, linked Plate, and linked PlateAcquisition
@@ -217,6 +280,22 @@ def screen_plate(request, itest, update_service):
     plate.name = rstring(itest.uuid())
     screen.linkPlate(plate)
     return update_service.saveAndReturnObject(screen)
+
+
+@pytest.fixture(scope='function')
+def screens_plates(request, itest, update_service, names):
+    """
+    Returns four new OMERO Screens and four linked Plates with required
+    fields set and with names that can be used to exercise sorting semantics.
+    """
+    screens = [ScreenI(), ScreenI(), ScreenI(), ScreenI()]
+    for index, screen in enumerate(screens):
+        screen.name = rstring(names[index])
+        plates = [PlateI(), PlateI(), PlateI(), PlateI()]
+        for index, plate in enumerate(plates):
+            plate.name = rstring(names[index])
+            screen.linkPlate(plate)
+    return update_service.saveAndReturnArray(screens)
 
 
 @pytest.fixture(scope='function')
@@ -598,4 +677,116 @@ class TestTree(object):
             expected[-1]['datasets'] = datasets
 
         marshaled = marshal_projects(conn, conn.getUserId())
+        assert marshaled == expected
+
+    def test_marshal_projects_different_users_as_other_user(
+            self, conn, projects_different_users):
+        project_a, project_b = projects_different_users
+        expected = list()
+        perms_css = 'canEdit canAnnotate canLink canDelete'
+        # The underlying query explicitly orders the Projects list by
+        # case-insensitive name.
+        for project in sorted(projects_different_users, cmp_name_insensitive):
+            expected.append({
+                'id': project.id.val,
+                'isOwned': False,
+                'name': project.name.val,
+                'childCount': 0,
+                'permsCss': perms_css,
+                'datasets': list()
+            })
+
+        conn.SERVICE_OPTS.setOmeroGroup(project_a.details.group.id.val)
+        marshaled = marshal_projects(conn, None)
+        assert marshaled == expected
+
+    def test_marshal_screens(self, conn, screens):
+        screen_a, screen_b, screen_c, screen_d = screens
+        perms_css = 'canEdit canAnnotate canLink canDelete canChgrp'
+        # Order is important to test desired HQL sorting semantics.
+        expected = [{
+            'id': screen_a.id.val,
+            'isOwned': True,
+            'name': 'Apple',
+            'plates': list(),
+            'childCount': 0,
+            'permsCss': perms_css
+        }, {
+            'id': screen_c.id.val,
+            'isOwned': True,
+            'name': 'atom',
+            'plates': list(),
+            'childCount': 0,
+            'permsCss': perms_css
+        }, {
+            'id': screen_b.id.val,
+            'isOwned': True,
+            'name': 'bat',
+            'plates': list(),
+            'childCount': 0,
+            'permsCss': perms_css
+        }, {
+            'id': screen_d.id.val,
+            'isOwned': True,
+            'name': 'Butter',
+            'plates': list(),
+            'childCount': 0,
+            'permsCss': perms_css
+        }]
+
+        marshaled = marshal_screens(conn, conn.getUserId())
+        assert marshaled == expected
+
+    def test_marshal_screens_plates(self, conn, screens_plates):
+        screen_a, screen_b, screen_c, screen_d = screens_plates
+        expected = list()
+        perms_css = 'canEdit canAnnotate canLink canDelete canChgrp'
+        # The underlying query explicitly orders the Screens list by
+        # case-insensitive name.
+        for screen in sorted(screens_plates, cmp_name_insensitive):
+            expected.append({
+                'id': screen.id.val,
+                'isOwned': True,
+                'name': screen.name.val,
+                'childCount': 4,
+                'permsCss': perms_css
+            })
+            # The underlying query explicitly orders the Plate list by
+            # case-insensitive name.
+            source = screen.linkedPlateList()
+            source.sort(cmp_name_insensitive)
+            plates = list()
+            for plate in source:
+                plates.append({
+                    'id': plate.id.val,
+                    'isOwned': True,
+                    'name': plate.name.val,
+                    'permsCss': perms_css,
+                    'plateAcquisitions': list(),
+                    'plateAcquisitionCount': 0
+                })
+            expected[-1]['plates'] = plates
+
+        marshaled = marshal_screens(conn, conn.getUserId())
+        assert marshaled == expected
+
+    def test_marshal_screens_different_users_as_other_user(
+            self, conn, screens_different_users):
+        screen_a, screen_b = screens_different_users
+        expected = list()
+        perms_css = 'canEdit canAnnotate canLink canDelete'
+        # The underlying query explicitly orders the Screens list by
+        # case-insensitive name.
+        for screen in sorted(screens_different_users, cmp_name_insensitive):
+            expected.append({
+                'id': screen.id.val,
+                'isOwned': False,
+                'name': screen.name.val,
+                'childCount': 0,
+                'permsCss': perms_css,
+                'plates': list()
+            })
+
+        conn.SERVICE_OPTS.setOmeroGroup(screen_a.details.group.id.val)
+        marshaled = marshal_screens(conn, None)
         assert marshaled == expected
