@@ -28,11 +28,10 @@
     <li id="experimenter-0" rel="experimenter{% ifnotequal manager.experimenter.id ome.eventContext.userId %}-locked{% endifnotequal %}">
         <a href="#">{% if manager.experimenter %}{{ manager.experimenter.getFullName }}{% else %}{% setting UI_MENU_DROPDOWN.ALL %}{% endif %}</a>
         <ul>
-            {% for c in manager.containers.projects %}
-            {% with p=projects|get_item:c.id %}
-            <li id='project-{{ c.id }}' rel="project{% if not c.isOwned %}-locked{% endif %}" class="{{ c.getPermsCss }}">
-				<a href="#">{{ c.name|default:"Project"|truncatebefor:"35" }} {% if p.childCount %}
-					<span class="children_count" id="counter-project-{{ c.id }}">{{ p.childCount }}</span>{% endif %}
+            {% for p in projects %}
+            <li id='project-{{ p.id }}' rel="project{% if not p.isOwned %}-locked{% endif %}" class="{{ p.permsCss }}">
+				<a href="#">{{ p.name|default:"Project"|truncatebefor:"35" }} {% if p.childCount %}
+					<span class="children_count" id="counter-project-{{ p.id }}">{{ p.childCount }}</span>{% endif %}
 				</a>
                 {% if p.childCount %}
                 <ul>
@@ -48,7 +47,6 @@
                 </ul>
                 {% endif %}
             </li> 
-            {% endwith %}
             {% endfor %}
         
 		
@@ -68,11 +66,10 @@
 			
 			
 			
-            {% for c in manager.containers.screens %}
-            {% with s=screens|get_item:c.id %}
-            <li id='screen-{{ c.id }}' rel="screen{% if not c.isOwned %}-locked{% endif %}" class="{{ c.getPermsCss }}">
-				<a href="#">{{ c.name|default:"Screen"|truncatebefor:"35" }} {% if s.childCount %}
-					<span class="children_count" id="counter-screen-{{ c.id }}">{{ s.childCount }}</span>{% endif %}</a>
+            {% for s in screens %}
+            <li id='screen-{{ s.id }}' rel="screen{% if not s.isOwned %}-locked{% endif %}" class="{{ s.permsCss }}">
+				<a href="#">{{ s.name|default:"Screen"|truncatebefor:"35" }} {% if s.childCount %}
+					<span class="children_count" id="counter-screen-{{ s.id }}">{{ s.childCount }}</span>{% endif %}</a>
                 {% if s.childCount %}
                 <ul>
                     {% for p in s.plates %}
@@ -92,7 +89,6 @@
                 </ul>
                 {% endif %}
             </li>
-            {% endwith %}
             {% endfor %}
             
 			
